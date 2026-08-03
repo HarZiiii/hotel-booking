@@ -1,0 +1,70 @@
+.sidebar{
+
+width:260px;
+
+background:#0f172a;
+
+color:white;
+
+position:fixed;
+
+top:0;
+
+bottom:0;
+
+left:0;
+
+}
+
+
+.brand{
+
+padding:20px;
+
+font-size:19px;
+
+font-weight:700;
+
+color:#38bdf8;
+
+border-bottom:1px solid #1e293b;
+
+}
+
+
+
+.sidebar ul{
+
+list-style:none;
+
+padding:10px 0;
+
+}
+
+
+.sidebar ul li a{
+
+display:flex;
+
+gap:12px;
+
+padding:12px 20px;
+
+color:#94a3b8;
+
+text-decoration:none;
+
+}
+
+
+.sidebar ul li.active a,
+.sidebar ul li a:hover{
+
+background:#1e293b;
+
+color:#38bdf8;
+
+border-left:4px solid #38bdf8;
+
+}
+
