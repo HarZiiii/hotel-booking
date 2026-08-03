@@ -4,11 +4,8 @@ require_once '../config/config.php';
 
 
 if(session_status() === PHP_SESSION_NONE){
-
     session_start();
-
 }
-
 
 
 /*
@@ -17,23 +14,15 @@ OWNER AUTH
 ================================
 */
 
-
 if(
-
-    !isset($_SESSION['user_id'])
-
-    ||
-
+    !isset($_SESSION['user_id']) ||
     $_SESSION['role'] !== 'owner'
-
 ){
 
     header("Location: ../login.php");
-
     exit();
 
 }
-
 
 
 $owner_id = $_SESSION['user_id'];
@@ -41,27 +30,16 @@ $owner_id = $_SESSION['user_id'];
 
 
 
-
 /*
 ================================
-SELECT HOTEL FILTER
+FILTER HOTEL
 ================================
 */
 
 
-$selected_hotel =
-
-isset($_GET['hotel_id'])
-
-?
-
-intval($_GET['hotel_id'])
-
-:
-
-0;
-
-
+$selected_hotel = isset($_GET['hotel_id'])
+? intval($_GET['hotel_id'])
+: 0;
 
 
 
@@ -75,28 +53,28 @@ FETCH OWNER HOTELS
 */
 
 
-$hotel_stmt=mysqli_prepare(
+$hotel_stmt = mysqli_prepare(
 
-$conn,
+    $conn,
 
-"
+    "
 
-SELECT
+    SELECT 
 
-hotel_id,
+    hotel_id,
 
-hotel_name
-
-
-FROM hotels
+    hotel_name
 
 
-WHERE owner_id=?
+    FROM hotels
 
 
-ORDER BY hotel_name ASC
+    WHERE owner_id = ?
 
-"
+
+    ORDER BY hotel_name ASC
+
+    "
 
 );
 
@@ -104,11 +82,11 @@ ORDER BY hotel_name ASC
 
 mysqli_stmt_bind_param(
 
-$hotel_stmt,
+    $hotel_stmt,
 
-"i",
+    "i",
 
-$owner_id
+    $owner_id
 
 );
 
@@ -118,12 +96,7 @@ mysqli_stmt_execute($hotel_stmt);
 
 
 
-$owner_hotels=mysqli_stmt_get_result(
-
-$hotel_stmt
-
-);
-
+$owner_hotels = mysqli_stmt_get_result($hotel_stmt);
 
 
 
@@ -139,61 +112,25 @@ FETCH ROOMS
 */
 
 
-$sql="
+$sql = "
 
 SELECT
-
 
 r.*,
 
-
-h.hotel_name,
-
-
-
-(
-
-SELECT
-
-ri.image_path
-
-
-FROM room_images ri
-
-
-WHERE ri.room_id=r.room_id
-
-
-AND ri.is_cover=1
-
-
-ORDER BY ri.room_image_id ASC
-
-
-LIMIT 1
-
-
-) AS room_image
-
-
+h.hotel_name
 
 
 FROM rooms r
 
 
-
-
 INNER JOIN hotels h
 
-
-ON r.hotel_id=h.hotel_id
-
+ON r.hotel_id = h.hotel_id
 
 
 
-
-WHERE h.owner_id=?
-
+WHERE h.owner_id = ?
 
 ";
 
@@ -201,15 +138,15 @@ WHERE h.owner_id=?
 
 
 
+$params = [
 
-$params=[
-
-$owner_id
+    $owner_id
 
 ];
 
 
-$types="i";
+$types = "i";
+
 
 
 
@@ -218,17 +155,17 @@ $types="i";
 if($selected_hotel > 0){
 
 
-$sql.="
+    $sql .= "
 
-AND r.hotel_id=?
+    AND r.hotel_id = ?
 
-";
-
-
-$types.="i";
+    ";
 
 
-$params[]=$selected_hotel;
+    $types .= "i";
+
+
+    $params[] = $selected_hotel;
 
 
 }
@@ -237,8 +174,7 @@ $params[]=$selected_hotel;
 
 
 
-
-$sql.="
+$sql .= "
 
 ORDER BY r.room_id DESC
 
@@ -248,12 +184,11 @@ ORDER BY r.room_id DESC
 
 
 
+$stmt = mysqli_prepare(
 
-$stmt=mysqli_prepare(
+    $conn,
 
-$conn,
-
-$sql
+    $sql
 
 );
 
@@ -261,14 +196,13 @@ $sql
 
 
 
-
 mysqli_stmt_bind_param(
 
-$stmt,
+    $stmt,
 
-$types,
+    $types,
 
-...$params
+    ...$params
 
 );
 
@@ -280,15 +214,16 @@ mysqli_stmt_execute($stmt);
 
 
 
-$rooms_query=mysqli_stmt_get_result(
+$rooms_query = mysqli_stmt_get_result($stmt);
 
-$stmt
 
-);
 
 
 
 ?>
+
+
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -301,9 +236,10 @@ $stmt
 
 
 <title>
-Room Inventory | Hotel Partner Hub
-</title>
 
+Room Inventory | Hotel Partner Hub
+
+</title>
 
 
 <meta name="viewport"
@@ -330,12 +266,6 @@ rel="stylesheet">
 
 
 
-<link href="../assets/css/owner.css"
-
-rel="stylesheet">
-
-
-
 
 
 <style>
@@ -351,17 +281,78 @@ background:#f4f6f9;
 
 
 
+.sidebar{
+
+width:260px;
+
+height:100vh;
+
+position:fixed;
+
+left:0;
+
+top:0;
+
+background:#0f172a;
+
+color:white;
+
+}
+
+
+
+.brand{
+
+padding:20px;
+
+font-size:19px;
+
+font-weight:700;
+
+color:#38bdf8;
+
+border-bottom:1px solid #1e293b;
+
+}
+
+
+
+.sidebar a{
+
+display:block;
+
+padding:13px 20px;
+
+color:#94a3b8;
+
+text-decoration:none;
+
+}
+
+
+
+.sidebar a:hover,
+
+.sidebar .active a{
+
+background:#1e293b;
+
+color:#38bdf8;
+
+border-left:4px solid #38bdf8;
+
+}
+
+
 
 
 .main-content{
 
 margin-left:260px;
 
-padding:30px;
+padding:25px 30px;
 
 }
-
-
 
 
 
@@ -373,6 +364,12 @@ padding:20px;
 
 border-radius:15px;
 
+display:flex;
+
+justify-content:space-between;
+
+align-items:center;
+
 box-shadow:0 3px 15px rgba(0,0,0,.05);
 
 margin-bottom:25px;
@@ -381,13 +378,11 @@ margin-bottom:25px;
 
 
 
-
-
 .card-box{
 
 background:white;
 
-padding:25px;
+padding:22px;
 
 border-radius:15px;
 
@@ -397,13 +392,11 @@ box-shadow:0 3px 15px rgba(0,0,0,.05);
 
 
 
-
-
 .room-image{
 
-width:65px;
+width:60px;
 
-height:65px;
+height:60px;
 
 object-fit:cover;
 
@@ -413,20 +406,13 @@ border-radius:10px;
 
 
 
-
-
 </style>
-
-
+<link href="../assets/css/owner.css" rel="stylesheet">
 
 </head>
 
 
-
-
-
 <body>
-
 
 
 <?php include '../includes/owner_sidebar.php'; ?>
@@ -436,20 +422,29 @@ border-radius:10px;
 
 
 
+
+
+
+<!-- ===============================
+MAIN CONTENT
+================================ -->
+
+
+
 <div class="main-content">
 
 
 
 
 
-<div class="topbar d-flex justify-content-between align-items-center">
 
+<div class="topbar">
 
 
 <div>
 
 
-<h3 class="fw-bold">
+<h4 class="fw-bold mb-1">
 
 
 <i class="fa-solid fa-bed text-primary"></i>
@@ -458,18 +453,15 @@ border-radius:10px;
 Room Inventory
 
 
-</h3>
+</h4>
 
 
 
-<p class="text-muted mb-0">
-
+<small class="text-muted">
 
 Manage your hotel rooms and availability
 
-
-</p>
-
+</small>
 
 
 </div>
@@ -480,7 +472,8 @@ Manage your hotel rooms and availability
 
 
 
-<a href="add_room.php?hotel_id=<?=$selected_hotel?>"
+<a href="add_room.php"
+
 class="btn btn-primary">
 
 
@@ -494,7 +487,6 @@ Add New Room
 
 
 
-
 </div>
 
 
@@ -505,7 +497,9 @@ Add New Room
 
 
 
-<!-- FILTER -->
+<!-- ===============================
+FILTER
+================================ -->
 
 
 
@@ -516,26 +510,18 @@ Add New Room
 <form method="GET">
 
 
-
-<div class="row g-3 align-items-end">
-
-
+<div class="row align-items-end g-3">
 
 
 
 <div class="col-md-8">
 
 
-
 <label class="form-label fw-semibold">
-
 
 Select Hotel
 
-
 </label>
-
-
 
 
 
@@ -548,17 +534,11 @@ onchange="this.form.submit()">
 
 
 
-
-
 <option value="">
-
 
 All Hotels
 
-
 </option>
-
-
 
 
 
@@ -568,15 +548,11 @@ All Hotels
 
 
 
-
-
 <option value="<?=$hotel['hotel_id']?>"
-
-
 
 <?=
 
-$selected_hotel == $hotel['hotel_id']
+$selected_hotel==$hotel['hotel_id']
 
 ?
 
@@ -591,14 +567,10 @@ $selected_hotel == $hotel['hotel_id']
 >
 
 
-
 <?=htmlspecialchars($hotel['hotel_name'])?>
 
 
 </option>
-
-
-
 
 
 
@@ -607,9 +579,7 @@ $selected_hotel == $hotel['hotel_id']
 
 
 
-
 </select>
-
 
 
 </div>
@@ -619,9 +589,7 @@ $selected_hotel == $hotel['hotel_id']
 
 
 
-
 <div class="col-md-4">
-
 
 
 <a href="manage_rooms.php"
@@ -638,7 +606,6 @@ Reset Filter
 </a>
 
 
-
 </div>
 
 
@@ -646,13 +613,11 @@ Reset Filter
 
 
 </div>
-
 
 
 </form>
 
 
-
 </div>
 
 
@@ -663,7 +628,9 @@ Reset Filter
 
 
 
-<!-- ROOM TABLE -->
+<!-- ===============================
+ROOM TABLE
+================================ -->
 
 
 
@@ -671,20 +638,14 @@ Reset Filter
 
 
 
-
-
 <div class="table-responsive">
 
 
-
-<table class="table table-hover align-middle">
-
-
+<table class="table table-hover align-middle mb-0">
 
 
 
 <thead class="table-light">
-
 
 
 <tr>
@@ -706,14 +667,14 @@ Hotel
 
 <th>
 
-Room
+Room Name
 
 </th>
 
 
 <th>
 
-Capacity
+Guest Capacity
 
 </th>
 
@@ -743,9 +704,7 @@ Action
 </tr>
 
 
-
 </thead>
-
 
 
 
@@ -767,6 +726,7 @@ Action
 
 
 
+
 <?php while($room=mysqli_fetch_assoc($rooms_query)): ?>
 
 
@@ -779,27 +739,15 @@ Action
 
 
 
-
-
 <td>
-
-
-
 
 
 <?php if(!empty($room['room_image'])): ?>
 
 
-
-
-
 <img src="../assets/images/rooms/<?=htmlspecialchars($room['room_image'])?>"
 
-class="room-image"
-
-onerror="this.src='../assets/images/default_room.jpg'">
-
-
+class="room-image">
 
 
 
@@ -807,19 +755,11 @@ onerror="this.src='../assets/images/default_room.jpg'">
 
 
 
-
-
 <i class="fa-solid fa-bed fa-2x text-secondary"></i>
 
 
 
-
-
 <?php endif; ?>
-
-
-
-
 
 
 </td>
@@ -831,9 +771,7 @@ onerror="this.src='../assets/images/default_room.jpg'">
 
 
 
-
 <td>
-
 
 
 <strong>
@@ -845,7 +783,6 @@ onerror="this.src='../assets/images/default_room.jpg'">
 </strong>
 
 
-
 </td>
 
 
@@ -855,10 +792,7 @@ onerror="this.src='../assets/images/default_room.jpg'">
 
 
 
-
 <td>
-
-
 
 
 <strong>
@@ -878,25 +812,10 @@ onerror="this.src='../assets/images/default_room.jpg'">
 <small class="text-muted">
 
 
-<?=htmlspecialchars($room['room_type'])?>
+<?=htmlspecialchars($room['room_type'] ?? '')?>
 
 
 </small>
-
-
-
-
-<br>
-
-
-<small>
-
-
-<?=htmlspecialchars($room['bed_type'])?>
-
-
-</small>
-
 
 
 
@@ -909,28 +828,29 @@ onerror="this.src='../assets/images/default_room.jpg'">
 
 
 
-
 <td>
-
-
 
 
 <i class="fa-solid fa-user"></i>
 
 
-<?=intval($room['max_adults'])?> Adults
+<?=intval($room['max_adults'] ?? 0)?>
+
+
+Adults
 
 
 
 <br>
 
 
-
 <i class="fa-solid fa-child"></i>
 
 
-<?=$room['max_children']?> Children
+<?=intval($room['max_children'] ?? 0)?>
 
+
+Children
 
 
 
@@ -943,9 +863,7 @@ onerror="this.src='../assets/images/default_room.jpg'">
 
 
 
-
 <td>
-
 
 
 <strong class="text-success">
@@ -960,25 +878,22 @@ MMK
 </strong>
 
 
-
 <br>
 
 
 <small>
 
 
-Extra Bed:
+Extra:
 
 
-<?=number_format($room['extra_bed_price'],2)?>
+<?=number_format($room['extra_bed_price'] ?? 0,2)?>
 
 
 </small>
 
 
-
 </td>
-
 
 
 
@@ -991,70 +906,59 @@ Extra Bed:
 
 
 
-
-
-<?php if($room['room_status']=="available"): ?>
-
+<?php if(($room['room_status'] ?? '') == 'available'): ?>
 
 
 <span class="badge bg-success">
 
-
 Available
-
 
 </span>
 
 
-
-
-<?php elseif($room['room_status']=="maintenance"): ?>
-
+<?php elseif(($room['room_status'] ?? '') == 'maintenance'): ?>
 
 
 <span class="badge bg-warning text-dark">
 
-
 Maintenance
 
-
 </span>
-
-
 
 
 <?php else: ?>
 
 
-
 <span class="badge bg-secondary">
 
-
-Inactive
-
+<?=htmlspecialchars($room['room_status'] ?? 'Inactive')?>
 
 </span>
-
-
 
 
 <?php endif; ?>
 
 
 
-
-
 </td>
+
+
+
+
+
+
+
+
 <td>
 
 
-<a href="edit_room.php?room_id=<?=$room['room_id']?>"
+
+<a href="edit_room.php?id=<?=$room['room_id']?>"
 
 class="btn btn-sm btn-outline-primary">
 
 
 <i class="fa-solid fa-pen"></i>
-
 
 Edit
 
@@ -1065,7 +969,8 @@ Edit
 
 
 
-<a href="delete_room.php?room_id=<?=$room['room_id']?>"
+
+<a href="delete_room.php?id=<?=$room['room_id']?>"
 
 class="btn btn-sm btn-outline-danger"
 
@@ -1073,7 +978,6 @@ onclick="return confirm('Are you sure you want to delete this room?');">
 
 
 <i class="fa-solid fa-trash"></i>
-
 
 </a>
 
@@ -1086,6 +990,7 @@ onclick="return confirm('Are you sure you want to delete this room?');">
 
 
 </tr>
+
 
 
 
@@ -1102,6 +1007,8 @@ onclick="return confirm('Are you sure you want to delete this room?');">
 
 
 
+
+
 <tr>
 
 
@@ -1110,47 +1017,34 @@ onclick="return confirm('Are you sure you want to delete this room?');">
 class="text-center py-5 text-muted">
 
 
-
-<i class="fa-solid fa-bed fa-3x mb-3"></i>
-
+<i class="fa-solid fa-bed fa-2x mb-2"></i>
 
 
-<h5>
-
-No Rooms Found
-
-</h5>
+<br>
 
 
+No rooms found.
 
 
-<p>
-
-You have not added any rooms yet.
-
-</p>
+<br>
 
 
+<a href="add_room.php"
+
+class="btn btn-primary mt-3">
 
 
-<a href="add_room.php?hotel_id=<?=$selected_hotel?>">
-
-
-<i class="fa-solid fa-plus"></i>
-
-
-Add First Room
+Add Your First Room
 
 
 </a>
-
-
 
 
 </td>
 
 
 </tr>
+
 
 
 
@@ -1163,7 +1057,9 @@ Add First Room
 
 
 
+
 </tbody>
+
 
 
 </table>
@@ -1171,6 +1067,7 @@ Add First Room
 
 
 </div>
+
 
 
 </div>
@@ -1189,9 +1086,7 @@ Add First Room
 
 © <?=date('Y')?> Hotel Partner Hub
 
-|
-
-Room Management
+| Room Management
 
 
 </small>
@@ -1203,10 +1098,7 @@ Room Management
 
 
 
-
 </div>
-
-
 
 
 

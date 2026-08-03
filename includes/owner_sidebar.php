@@ -12,7 +12,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
 <i class="fa-solid fa-hotel"></i>
 
-<span>Hotel Partner Hub</span>
+<span>StayFlow Partner</span>
 
 </div>
 

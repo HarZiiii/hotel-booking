@@ -8,6 +8,7 @@ if(session_status() === PHP_SESSION_NONE){
 }
 
 
+
 /*
 ================================
 OWNER AUTH
@@ -28,57 +29,77 @@ if(
 
 $owner_id = $_SESSION['user_id'];
 
+
+
+$message = "";
 $error = "";
+
+
 
 
 
 /*
 ================================
-IMAGE UPLOAD
+IMAGE UPLOAD FUNCTION
 ================================
 */
 
-function uploadRoomImage($file)
-{
+
+function uploadRoomImage($file){
+
 
     if(
         !isset($file) ||
         $file['error'] !== UPLOAD_ERR_OK
     ){
+
         return "";
+
     }
 
 
 
     $allowed = [
-        "jpg",
-        "jpeg",
-        "png",
-        "webp"
+
+        'jpg',
+        'jpeg',
+        'png',
+        'webp'
+
     ];
 
 
 
     $ext = strtolower(
+
         pathinfo(
+
             $file['name'],
+
             PATHINFO_EXTENSION
+
         )
+
     );
 
 
 
-    if(!in_array($ext,$allowed))
-    {
+    if(!in_array($ext,$allowed)){
+
         return "";
+
     }
 
 
 
-    if($file['size'] > 2 * 1024 * 1024)
-    {
+
+    if($file['size'] > 2 * 1024 * 1024){
+
         return "";
+
     }
+
+
 
 
 
@@ -86,36 +107,59 @@ function uploadRoomImage($file)
 
 
 
-    if(!is_dir($folder))
-    {
+    if(!is_dir($folder)){
+
         mkdir(
+
             $folder,
+
             0755,
+
             true
+
         );
+
     }
 
 
 
+
+
+
     $filename =
-        "room_".
-        time().
-        "_".
-        bin2hex(random_bytes(5)).
-        ".".$ext;
+
+    "room_"
+
+    .time()
+
+    ."_"
+
+    .bin2hex(random_bytes(5))
+
+    ."."
+
+    .$ext;
+
+
 
 
 
     if(
+
         move_uploaded_file(
+
             $file['tmp_name'],
+
             $folder.$filename
+
         )
+
     ){
 
         return $filename;
 
     }
+
 
 
     return "";
@@ -128,19 +172,25 @@ function uploadRoomImage($file)
 
 
 
+
+
 /*
 ================================
-ADD ROOM
+ADD ROOM PROCESS
 ================================
 */
 
 
 if(
+
 $_SERVER['REQUEST_METHOD']=="POST"
+
 &&
+
 isset($_POST['add_room'])
-)
-{
+
+){
+
 
 
     $hotel_id = intval($_POST['hotel_id']);
@@ -153,124 +203,120 @@ isset($_POST['add_room'])
 
 
     $check = mysqli_prepare(
+
         $conn,
 
         "
+
         SELECT hotel_id
+
         FROM hotels
+
         WHERE hotel_id=?
+
         AND owner_id=?
+
         "
+
     );
 
 
 
     mysqli_stmt_bind_param(
+
         $check,
+
         "ii",
+
         $hotel_id,
+
         $owner_id
+
     );
+
 
 
     mysqli_stmt_execute($check);
 
 
 
-    $result =
+    $hotel_result =
+
     mysqli_stmt_get_result($check);
 
 
 
-    if(mysqli_num_rows($result)==0)
-    {
 
-        $error="Invalid hotel selected.";
+
+    if(mysqli_num_rows($hotel_result)==0){
+
+
+        $error = "Invalid hotel selected.";
+
 
     }
 
-    else
-    {
-
-
-
-        $room_name =
-        trim($_POST['room_name']);
-
-
-
-        $room_type =
-        $_POST['room_type'];
-
-
-
-        $bed_type =
-        $_POST['bed_type'];
-
-
-
-        $room_size =
-        trim($_POST['room_size']);
-
-
-
-        $room_size_unit =
-        $_POST['room_size_unit'];
-
-
-
-        $max_adults =
-        intval($_POST['max_adults']);
-
-
-
-        $max_children =
-        intval($_POST['max_children']);
-
-
-
-        $total_rooms =
-        intval($_POST['total_rooms']);
-
-
-
-        $base_price =
-        floatval($_POST['base_price']);
-
-
-
-        $extra_bed_price =
-        floatval($_POST['extra_bed_price']);
-
-
-
-        $description =
-        trim($_POST['room_description']);
-
-
-
-        $status =
-        $_POST['room_status'];
+    else{
 
 
 
 
-        /*
-        MAIN IMAGE
-        */
+
+        $room_name = trim($_POST['room_name']);
 
 
-        $main_image="";
+        $room_type = trim($_POST['room_type']);
+
+
+        $bed_type = trim($_POST['bed_type']);
+
+
+        $room_size = trim($_POST['room_size']);
 
 
 
-        if(isset($_FILES['room_image']))
-        {
+        $max_adults = intval($_POST['max_adults']);
 
-            $main_image =
-            uploadRoomImage(
+
+        $max_children = intval($_POST['max_children']);
+
+
+        $total_rooms = intval($_POST['total_rooms']);
+
+
+
+        $base_price = floatval($_POST['base_price']);
+
+
+        $extra_bed_price = floatval($_POST['extra_bed_price']);
+
+
+
+        $description = trim($_POST['room_description']);
+
+
+
+        $status = $_POST['room_status'];
+
+
+
+
+
+
+
+        $room_image = "";
+
+
+
+        if(isset($_FILES['room_image'])){
+
+
+            $room_image = uploadRoomImage(
+
                 $_FILES['room_image']
+
             );
+
 
         }
 
@@ -285,31 +331,44 @@ isset($_POST['add_room'])
         */
 
 
-        $stmt=mysqli_prepare(
+        $stmt = mysqli_prepare(
 
             $conn,
 
             "
+
             INSERT INTO rooms
 
             (
+
             hotel_id,
+
             room_name,
+
             room_type,
+
             bed_type,
+
             room_size,
-            room_size_unit,
+
             max_adults,
+
             max_children,
+
             total_rooms,
+
             base_price,
+
             extra_bed_price,
+
             room_description,
+
             room_status
+
             )
 
-            VALUES
-            (?,?,?,?,?,?,?,?,?,?,?,?,?)
+
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
 
             "
 
@@ -323,20 +382,30 @@ isset($_POST['add_room'])
 
             $stmt,
 
-            "isssssiiiddsss",
+            "issssiiiddss",
 
             $hotel_id,
+
             $room_name,
+
             $room_type,
+
             $bed_type,
+
             $room_size,
-            $room_size_unit,
+
             $max_adults,
+
             $max_children,
+
             $total_rooms,
+
             $base_price,
+
             $extra_bed_price,
+
             $description,
+
             $status
 
         );
@@ -344,64 +413,17 @@ isset($_POST['add_room'])
 
 
 
-        if(mysqli_stmt_execute($stmt))
-        {
 
-
-            $room_id =
-            mysqli_insert_id($conn);
+        if(mysqli_stmt_execute($stmt)){
 
 
 
-
-            /*
-            SAVE MAIN IMAGE
-            */
-
-
-            if($main_image!="")
-            {
-
-
-                $imgStmt=mysqli_prepare(
-
-                    $conn,
-
-                    "
-                    INSERT INTO room_images
-
-                    (
-                    room_id,
-                    image_path,
-                    is_cover
-                    )
-
-                    VALUES(?,?,1)
-
-                    "
-
-                );
+            $room_id = mysqli_insert_id($conn);
 
 
 
-                mysqli_stmt_bind_param(
-
-                    $imgStmt,
-
-                    "is",
-
-                    $room_id,
-
-                    $main_image
-
-                );
 
 
-
-                mysqli_stmt_execute($imgStmt);
-
-
-            }
 
             /*
             GALLERY UPLOAD
@@ -416,8 +438,8 @@ isset($_POST['add_room'])
 
                 !empty($_FILES['gallery']['name'][0])
 
-            )
-            {
+            ){
+
 
 
                 foreach(
@@ -426,8 +448,8 @@ isset($_POST['add_room'])
 
                     as $key=>$tmp
 
-                )
-                {
+                ){
+
 
 
                     $gallery = [
@@ -435,13 +457,10 @@ isset($_POST['add_room'])
                         "name" =>
                         $_FILES['gallery']['name'][$key],
 
-                        "tmp_name" =>
-                        $tmp,
-
+                        "tmp_name"=>$tmp,
 
                         "size" =>
                         $_FILES['gallery']['size'][$key],
-
 
                         "error" =>
                         $_FILES['gallery']['error'][$key]
@@ -451,34 +470,39 @@ isset($_POST['add_room'])
 
 
 
-                    $image =
-                    uploadRoomImage($gallery);
+
+                    $img = uploadRoomImage($gallery);
 
 
 
 
-                    if($image!="")
-                    {
+                    if($img!=""){
 
 
-                        $gstmt=mysqli_prepare(
+
+                        $gstmt = mysqli_prepare(
 
                             $conn,
 
                             "
+
                             INSERT INTO room_images
 
                             (
+
                             room_id,
-                            image_path,
-                            is_cover
+
+                            image_path
+
                             )
 
-                            VALUES(?,?,0)
+                            VALUES(?,?)
 
                             "
 
                         );
+
+
 
 
 
@@ -490,9 +514,11 @@ isset($_POST['add_room'])
 
                             $room_id,
 
-                            $image
+                            $img
 
                         );
+
+
 
 
 
@@ -525,14 +551,12 @@ isset($_POST['add_room'])
             exit();
 
 
-
         }
 
-        else
-        {
+        else{
 
-            $error =
-            "Failed to save room.";
+
+            $error = "Failed to save room.";
 
         }
 
@@ -543,9 +567,8 @@ isset($_POST['add_room'])
 
 
 
+
 }
-
-
 
 
 
@@ -560,30 +583,23 @@ FETCH OWNER HOTELS
 */
 
 
-$hotels=mysqli_prepare(
+$hotels = mysqli_prepare(
 
     $conn,
 
     "
-    SELECT
 
-    hotel_id,
-
-    hotel_name
-
+    SELECT hotel_id, hotel_name
 
     FROM hotels
 
-
     WHERE owner_id=?
-
 
     ORDER BY hotel_name ASC
 
     "
 
 );
-
 
 
 
@@ -599,46 +615,63 @@ mysqli_stmt_bind_param(
 
 
 
-
 mysqli_stmt_execute($hotels);
 
 
 
-$hotel_list =
-mysqli_stmt_get_result($hotels);
+$hotel_list = mysqli_stmt_get_result($hotels);
 
 
 
 ?>
+id="add_room_part2"
+
 <!DOCTYPE html>
 
 <html lang="en">
 
+
 <head>
+
 
 <meta charset="UTF-8">
 
+
 <title>
+
 Add New Room | Hotel Partner Hub
+
 </title>
 
 
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport"
+
+content="width=device-width, initial-scale=1.0">
+
 
 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+
 rel="stylesheet">
+
 
 
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+
 rel="stylesheet">
+
 
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+
 rel="stylesheet">
 
 
+
+
+
 <style>
+
 
 body{
 
@@ -647,6 +680,67 @@ font-family:'Poppins',sans-serif;
 background:#f4f6f9;
 
 }
+
+
+
+.sidebar{
+
+width:260px;
+
+height:100vh;
+
+position:fixed;
+
+background:#0f172a;
+
+color:white;
+
+left:0;
+
+top:0;
+
+}
+
+
+
+.brand{
+
+padding:20px;
+
+font-size:19px;
+
+font-weight:700;
+
+color:#38bdf8;
+
+}
+
+
+
+.sidebar a{
+
+display:block;
+
+padding:13px 20px;
+
+color:#cbd5e1;
+
+text-decoration:none;
+
+}
+
+
+
+.sidebar a:hover{
+
+background:#1e293b;
+
+color:#38bdf8;
+
+}
+
+
+
 
 
 .main-content{
@@ -658,17 +752,23 @@ padding:30px;
 }
 
 
+
+
+
 .card-box{
 
 background:white;
 
-padding:25px;
-
 border-radius:15px;
+
+padding:25px;
 
 box-shadow:0 3px 15px rgba(0,0,0,.05);
 
 }
+
+
+
 
 
 .form-label{
@@ -676,6 +776,7 @@ box-shadow:0 3px 15px rgba(0,0,0,.05);
 font-weight:600;
 
 }
+
 
 
 .preview-image{
@@ -695,20 +796,21 @@ margin-top:10px;
 }
 
 
+
+
+
 </style>
 
-
 <link href="../assets/css/owner.css" rel="stylesheet">
-
 
 </head>
 
 
 
 <body>
-
-
 <?php include '../includes/owner_sidebar.php'; ?>
+
+<!-- MAIN CONTENT -->
 
 
 
@@ -716,23 +818,32 @@ margin-top:10px;
 
 
 
+
+
 <div class="d-flex justify-content-between align-items-center mb-4">
+
 
 
 <div>
 
+
 <h3 class="fw-bold">
+
 
 <i class="fa-solid fa-plus text-primary"></i>
 
+
 Add New Room
+
 
 </h3>
 
 
 <p class="text-muted">
 
+
 Create a new room for your hotel
+
 
 </p>
 
@@ -741,13 +852,20 @@ Create a new room for your hotel
 
 
 
+
+
+
+
 <a href="manage_rooms.php"
 
 class="btn btn-outline-secondary">
 
+
 <i class="fa-solid fa-arrow-left"></i>
 
+
 Back
+
 
 </a>
 
@@ -760,15 +878,25 @@ Back
 
 
 
+
+
+
 <?php if($error!=""): ?>
+
 
 <div class="alert alert-danger">
 
+
 <?=$error?>
+
 
 </div>
 
+
 <?php endif; ?>
+
+
+
 
 
 
@@ -779,9 +907,15 @@ Back
 
 
 
+
+
+
 <form method="POST"
 
 enctype="multipart/form-data">
+
+
+
 
 
 <input type="hidden"
@@ -794,13 +928,18 @@ value="1">
 
 
 
+
+
 <div class="row g-4">
 
 
 
 
 
+
 <!-- HOTEL -->
+
+
 
 <div class="col-md-6">
 
@@ -820,11 +959,7 @@ class="form-select"
 required>
 
 
-<option value="">
-
-Choose Hotel
-
-</option>
+<option value="">Choose Hotel</option>
 
 
 
@@ -833,12 +968,16 @@ Choose Hotel
 
 <option value="<?=$hotel['hotel_id']?>">
 
+
 <?=htmlspecialchars($hotel['hotel_name'])?>
+
 
 </option>
 
 
+
 <?php endwhile; ?>
+
 
 
 </select>
@@ -851,7 +990,11 @@ Choose Hotel
 
 
 
+
+
+
 <!-- ROOM NAME -->
+
 
 
 <div class="col-md-6">
@@ -884,7 +1027,9 @@ required>
 
 
 
-<!-- ROOM TYPE FIXED -->
+
+<!-- ROOM TYPE -->
+
 
 
 <div class="col-md-4">
@@ -897,70 +1042,13 @@ Room Type
 </label>
 
 
-<select name="room_type"
+<input type="text"
 
-class="form-select"
+name="room_type"
 
-required>
+class="form-control"
 
-
-<option value="Single">
-
-Single
-
-</option>
-
-
-<option value="Double">
-
-Double
-
-</option>
-
-
-<option value="Twin">
-
-Twin
-
-</option>
-
-
-<option value="Triple">
-
-Triple
-
-</option>
-
-
-<option value="Deluxe">
-
-Deluxe
-
-</option>
-
-
-<option value="Suite">
-
-Suite
-
-</option>
-
-
-<option value="Family">
-
-Family
-
-</option>
-
-
-<option value="Executive">
-
-Executive
-
-</option>
-
-
-</select>
+placeholder="Deluxe / Suite">
 
 
 </div>
@@ -972,7 +1060,9 @@ Executive
 
 
 
-<!-- BED TYPE FIXED -->
+
+<!-- BED TYPE -->
+
 
 
 <div class="col-md-4">
@@ -985,56 +1075,13 @@ Bed Type
 </label>
 
 
-<select name="bed_type"
+<input type="text"
 
-class="form-select"
+name="bed_type"
 
-required>
+class="form-control"
 
-
-<option value="Single Bed">
-
-Single Bed
-
-</option>
-
-
-<option value="Double Bed">
-
-Double Bed
-
-</option>
-
-
-<option value="Queen Bed">
-
-Queen Bed
-
-</option>
-
-
-<option value="King Bed">
-
-King Bed
-
-</option>
-
-
-<option value="Twin Bed">
-
-Twin Bed
-
-</option>
-
-
-<option value="Mixed">
-
-Mixed
-
-</option>
-
-
-</select>
+placeholder="King / Twin">
 
 
 </div>
@@ -1045,7 +1092,9 @@ Mixed
 
 
 
+
 <!-- SIZE -->
+
 
 
 <div class="col-md-4">
@@ -1058,23 +1107,13 @@ Room Size
 </label>
 
 
-<input type="number"
-step="0.01"
+<input type="text"
+
 name="room_size"
+
 class="form-control"
-placeholder="30">
-<select name="room_size_unit"
-class="form-select">
 
-<option value="sqm">
-Square Meter
-</option>
-
-<option value="sqft">
-Square Feet
-</option>
-
-</select>
+placeholder="30 sqm">
 
 
 </div>
@@ -1086,7 +1125,9 @@ Square Feet
 
 
 
+
 <!-- ADULT -->
+
 
 
 <div class="col-md-4">
@@ -1119,7 +1160,9 @@ min="1">
 
 
 
+
 <!-- CHILD -->
+
 
 
 <div class="col-md-4">
@@ -1151,7 +1194,10 @@ min="0">
 
 
 
+
+
 <!-- TOTAL -->
+
 
 
 <div class="col-md-4">
@@ -1184,7 +1230,9 @@ min="1">
 
 
 
+
 <!-- PRICE -->
+
 
 
 <div class="col-md-6">
@@ -1211,6 +1259,12 @@ required>
 
 
 
+
+
+
+
+
+<!-- EXTRA -->
 
 
 
@@ -1242,7 +1296,9 @@ value="0">
 
 
 
+
 <!-- STATUS -->
+
 
 
 <div class="col-md-6">
@@ -1253,6 +1309,7 @@ value="0">
 Room Status
 
 </label>
+
 
 
 <select name="room_status"
@@ -1293,7 +1350,9 @@ Inactive
 
 
 
+
 <!-- MAIN IMAGE -->
+
 
 
 <div class="col-md-6">
@@ -1331,7 +1390,9 @@ class="preview-image">
 
 
 
+
 <!-- DESCRIPTION -->
+
 
 
 <div class="col-12">
@@ -1364,7 +1425,9 @@ placeholder="Describe this room..."></textarea>
 
 
 
+
 <!-- GALLERY -->
+
 
 
 <div class="col-12">
@@ -1402,7 +1465,12 @@ You can select multiple images.
 
 
 
+
+
+
 </div>
+
+
 
 
 
@@ -1415,9 +1483,12 @@ You can select multiple images.
 
 <button class="btn btn-primary px-5">
 
+
 <i class="fa-solid fa-save"></i>
 
+
 Save Room
+
 
 </button>
 
@@ -1432,12 +1503,18 @@ Save Room
 </form>
 
 
+
+
+
 </div>
 
 
+
+
+
+
+
 </div>
-
-
 
 
 
@@ -1448,32 +1525,27 @@ Save Room
 <script>
 
 
-function previewMain(input)
-
-{
+function previewMain(input){
 
 
-if(input.files && input.files[0])
 
-{
+if(input.files && input.files[0]){
 
 
 let reader = new FileReader();
 
 
 
-reader.onload=function(e)
-
-{
+reader.onload=function(e){
 
 
-let img=document.getElementById("imagePreview");
+let img=document.getElementById('imagePreview');
 
 
 img.src=e.target.result;
 
 
-img.style.display="block";
+img.style.display='block';
 
 
 }
@@ -1497,10 +1569,12 @@ reader.readAsDataURL(input.files[0]);
 
 
 
+
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
 
-
 </body>
+
 
 </html>

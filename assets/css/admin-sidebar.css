@@ -1,0 +1,169 @@
+:root {
+    --admin-sidebar-width: 288px;
+    --admin-sidebar-bg: #0f1a2f;
+    --admin-sidebar-panel: #172540;
+    --admin-sidebar-text: #b9c8dc;
+    --admin-sidebar-muted: #7f91aa;
+    --admin-sidebar-accent: #24a8ff;
+    --admin-sidebar-border: rgba(255,255,255,.08);
+}
+
+.admin-shared-sidebar.sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: var(--admin-sidebar-width) !important;
+    min-width: var(--admin-sidebar-width) !important;
+    height: 100vh !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-y: auto !important;
+    background: var(--admin-sidebar-bg) !important;
+    border-right: 1px solid var(--admin-sidebar-border) !important;
+    box-shadow: 8px 0 28px rgba(6, 15, 30, .08) !important;
+    z-index: 1000 !important;
+    color: var(--admin-sidebar-text) !important;
+}
+
+.admin-sidebar-brand {
+    min-height: 98px;
+    padding: 22px 22px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--admin-sidebar-border);
+}
+
+.admin-sidebar-brand-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 42px;
+    background: linear-gradient(135deg, #1e9cff, #37c8ff);
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(36, 168, 255, .22);
+}
+
+.admin-sidebar-brand strong {
+    display: block;
+    color: #fff;
+    font-size: 18px;
+    line-height: 1.2;
+    letter-spacing: -.2px;
+}
+
+.admin-sidebar-brand small {
+    display: block;
+    margin-top: 4px;
+    color: var(--admin-sidebar-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+}
+
+.admin-sidebar-nav {
+    padding: 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1 1 auto;
+}
+
+.admin-shared-sidebar .admin-sidebar-link {
+    position: relative;
+    min-height: 48px;
+    padding: 0 14px !important;
+    border-radius: 11px;
+    display: flex !important;
+    align-items: center;
+    gap: 13px;
+    text-decoration: none !important;
+    color: var(--admin-sidebar-text) !important;
+    background: transparent !important;
+    border: 0 !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    transition: background .18s ease, color .18s ease, transform .18s ease;
+}
+
+.admin-shared-sidebar .admin-sidebar-link i {
+    width: 21px;
+    text-align: center;
+    font-size: 15px;
+    color: #82a1c6;
+}
+
+.admin-shared-sidebar .admin-sidebar-link:hover {
+    color: #fff !important;
+    background: rgba(255,255,255,.065) !important;
+    transform: translateX(2px);
+}
+
+.admin-shared-sidebar .admin-sidebar-link.active {
+    color: #fff !important;
+    background: var(--admin-sidebar-panel) !important;
+    box-shadow: inset 3px 0 0 var(--admin-sidebar-accent);
+}
+
+.admin-shared-sidebar .admin-sidebar-link.active i {
+    color: var(--admin-sidebar-accent);
+}
+
+.admin-sidebar-footer {
+    padding: 14px;
+    border-top: 1px solid var(--admin-sidebar-border);
+}
+
+.admin-shared-sidebar .admin-sidebar-logout:hover {
+    background: rgba(255, 91, 91, .10) !important;
+    color: #ffb2b2 !important;
+}
+
+.admin-shared-sidebar .admin-sidebar-logout:hover i { color: #ff7f7f; }
+
+/* Force every admin page to reserve exactly the same sidebar space. */
+body > .wrapper,
+.wrapper {
+    min-height: 100vh;
+}
+
+.admin-shared-sidebar ~ .main-content,
+.wrapper > .main-content {
+    margin-left: var(--admin-sidebar-width) !important;
+    width: calc(100% - var(--admin-sidebar-width)) !important;
+    max-width: none !important;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+    :root { --admin-sidebar-width: 82px; }
+
+    .admin-sidebar-brand {
+        justify-content: center;
+        padding: 18px 10px;
+    }
+
+    .admin-sidebar-brand > span:last-child,
+    .admin-sidebar-link span {
+        display: none;
+    }
+
+    .admin-sidebar-nav,
+    .admin-sidebar-footer { padding-left: 10px; padding-right: 10px; }
+
+    .admin-shared-sidebar .admin-sidebar-link {
+        justify-content: center;
+        padding: 0 !important;
+    }
+
+    .admin-shared-sidebar .admin-sidebar-link i {
+        width: auto;
+        font-size: 17px;
+    }
+}

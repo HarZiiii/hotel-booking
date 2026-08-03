@@ -42,513 +42,7 @@ $error = "";
 
 /*
 ===========================================
-2. CSRF TOKEN
-===========================================
-*/
-
-
-if(empty($_SESSION['csrf_token'])){
-
-
-    $_SESSION['csrf_token'] =
-    bin2hex(random_bytes(32));
-
-
-}
-
-
-
-
-
-
-
-
-
-
-/*
-===========================================
-3. AUDIT LOG FUNCTION
-===========================================
-*/
-
-
-function insertOwnerAuditLog(
-
-    $conn,
-    $user_id,
-    $action,
-    $table_name,
-    $record_id
-
-){
-
-
-
-    $ip =
-    $_SERVER['REMOTE_ADDR']
-    ??
-    '127.0.0.1';
-
-
-
-    $agent =
-    $_SERVER['HTTP_USER_AGENT']
-    ??
-    'Unknown';
-
-
-
-
-
-    $stmt = mysqli_prepare(
-
-        $conn,
-
-        "
-
-        INSERT INTO audit_logs
-
-        (
-
-        user_id,
-        action,
-        table_name,
-        record_id,
-        ip_address,
-        user_agent
-
-        )
-
-
-        VALUES
-
-        (?,?,?,?,?,?)
-
-        "
-
-    );
-
-
-
-
-    mysqli_stmt_bind_param(
-
-        $stmt,
-
-        "ississ",
-
-        $user_id,
-
-        $action,
-
-        $table_name,
-
-        $record_id,
-
-        $ip,
-
-        $agent
-
-    );
-
-
-
-    mysqli_stmt_execute($stmt);
-
-
-}
-
-
-
-
-
-
-
-
-
-/*
-===========================================
-4. UPDATE BOOKING STATUS
-===========================================
-*/
-
-
-if(
-    $_SERVER['REQUEST_METHOD']==='POST'
-    &&
-    isset($_POST['update_booking_status'])
-){
-
-
-
-    if(
-        !isset($_POST['csrf_token'])
-        ||
-        !hash_equals(
-            $_SESSION['csrf_token'],
-            $_POST['csrf_token']
-        )
-    ){
-
-        die("Invalid CSRF Token");
-
-    }
-
-
-
-
-
-
-    $booking_id =
-    intval(
-        $_POST['booking_id'] ?? 0
-    );
-
-
-
-    $booking_status =
-    trim(
-        $_POST['booking_status'] ?? ''
-    );
-
-
-
-
-
-
-    $allowed_status = [
-
-        'Pending',
-        'Confirmed',
-        'Checked In',
-        'Checked Out',
-        'Cancelled',
-        'Completed'
-
-        ];
-
-
-
-
-
-
-
-    if(
-        $booking_id > 0
-        &&
-        in_array(
-            $booking_status,
-            $allowed_status
-        )
-    ){
-
-
-
-        /*
-        ===========================
-        CHECK OWNER ACCESS
-        ===========================
-        */
-
-
-        $check_stmt = mysqli_prepare(
-
-            $conn,
-
-            "
-
-            SELECT
-
-
-            b.customer_id,
-
-            b.booking_code,
-
-            h.hotel_name
-
-
-
-            FROM bookings b
-
-
-
-            LEFT JOIN hotels h
-
-            ON b.hotel_id=h.hotel_id
-
-
-
-            WHERE
-
-            b.booking_id=?
-
-            AND
-
-            h.owner_id=?
-
-
-            "
-
-        );
-
-
-
-
-        mysqli_stmt_bind_param(
-
-            $check_stmt,
-
-            "ii",
-
-            $booking_id,
-
-            $owner_id
-
-        );
-
-
-
-        mysqli_stmt_execute($check_stmt);
-
-
-
-        $check_result =
-        mysqli_stmt_get_result(
-            $check_stmt
-        );
-
-
-
-        $booking =
-        mysqli_fetch_assoc(
-            $check_result
-        );
-
-
-
-
-
-
-
-
-        if($booking){
-
-
-
-            /*
-            ===========================
-            UPDATE BOOKING
-            ===========================
-            */
-
-
-            $update_stmt = mysqli_prepare(
-
-                $conn,
-
-                "
-
-                UPDATE bookings
-
-                SET booking_status=?
-
-                WHERE booking_id=?
-
-                "
-
-            );
-
-
-
-            mysqli_stmt_bind_param(
-
-                $update_stmt,
-
-                "si",
-
-                $booking_status,
-
-                $booking_id
-
-            );
-
-
-
-            mysqli_stmt_execute(
-                $update_stmt
-            );
-
-
-
-
-
-
-
-
-
-            /*
-            ===========================
-            CUSTOMER NOTIFICATION
-            ===========================
-            */
-
-
-            if(!empty($booking['customer_id'])){
-
-
-
-                $title =
-                "Booking Status Updated";
-
-
-
-                $message =
-
-                "Your booking "
-
-                .
-
-                ($booking['booking_code'] ?? '')
-
-                .
-
-                " at "
-
-                .
-
-                ($booking['hotel_name'] ?? 'hotel')
-
-                .
-
-                " is now "
-
-                .
-
-                $booking_status;
-
-
-
-
-
-
-                $notify_stmt = mysqli_prepare(
-
-                    $conn,
-
-                    "
-
-                    INSERT INTO notifications
-
-                    (
-
-                    user_id,
-
-                    title,
-
-                    message,
-
-                    notification_type
-
-                    )
-
-
-                    VALUES
-
-                    (?,?,?,'Booking')
-
-                    "
-
-                );
-
-
-
-
-
-                mysqli_stmt_bind_param(
-
-                    $notify_stmt,
-
-                    "iss",
-
-                    $booking['customer_id'],
-
-                    $title,
-
-                    $message
-
-                );
-
-
-
-                mysqli_stmt_execute(
-                    $notify_stmt
-                );
-
-
-            }
-
-
-
-
-
-
-
-
-
-            /*
-            ===========================
-            AUDIT LOG
-            ===========================
-            */
-
-
-            insertOwnerAuditLog(
-
-                $conn,
-
-                $owner_id,
-
-                "BOOKING_STATUS_UPDATED",
-
-                "bookings",
-
-                $booking_id
-
-            );
-
-
-
-
-
-
-
-            header(
-                "Location: bookings.php?msg=status_updated"
-            );
-
-            exit();
-
-
-
-        }
-
-
-    }
-
-
-}
-
-
-
-
-
-
-
-
-
-/*
-===========================================
-5. SEARCH FILTER
+2. SEARCH FILTER
 ===========================================
 */
 
@@ -646,7 +140,7 @@ if(count($where)>0){
 
 /*
 ===========================================
-6. PAGINATION
+3. PAGINATION
 ===========================================
 */
 
@@ -682,7 +176,7 @@ $offset =
 
 /*
 ===========================================
-7. COUNT BOOKINGS
+4. COUNT BOOKINGS
 ===========================================
 */
 
@@ -796,7 +290,7 @@ ceil(
 
 /*
 ===========================================
-8. FETCH BOOKINGS
+5. FETCH BOOKINGS
 ===========================================
 */
 
@@ -927,7 +421,7 @@ mysqli_stmt_get_result($stmt);
 
 /*
 ===========================================
-9. NOTIFICATION COUNT
+6. NOTIFICATION COUNT
 ===========================================
 */
 
@@ -936,7 +430,7 @@ $total_notifications = 0;
 
 
 
-$notification_stmt = mysqli_prepare(
+$notification_result = mysqli_query(
 
 $conn,
 
@@ -946,38 +440,30 @@ SELECT COUNT(*) total
 
 FROM notifications
 
-WHERE user_id=?
-
-AND is_read=0
+WHERE is_read=0
 
 "
 
 );
 
 
-mysqli_stmt_bind_param(
 
-$notification_stmt,
+if($notification_result){
 
-"i",
 
-$owner_id
-
+$data =
+mysqli_fetch_assoc(
+    $notification_result
 );
 
 
-mysqli_stmt_execute($notification_stmt);
+
+$total_notifications =
+$data['total'] ?? 0;
 
 
-$notification_result =
-mysqli_stmt_get_result($notification_stmt);
+}
 
-
-
-$data=mysqli_fetch_assoc($notification_result);
-
-
-$total_notifications=$data['total'] ?? 0;
 
 ?>
 <!DOCTYPE html>
@@ -1308,7 +794,7 @@ Guest Reservations
 
 <small class="text-muted">
 
-Track and manage customer bookings across your hotels
+View customer bookings across your hotels
 
 </small>
 
@@ -1367,22 +853,6 @@ class="btn btn-light position-relative rounded-circle">
 
 
 
-<?php if(isset($_GET['msg']) && $_GET['msg']=="status_updated"): ?>
-
-
-<div class="alert alert-success">
-
-
-<i class="fa-solid fa-circle-check"></i>
-
-
-Booking status updated successfully.
-
-
-</div>
-
-
-<?php endif; ?>
 
 
 
@@ -1528,7 +998,6 @@ Guest Booking Records
 
 <th>Status</th>
 
-<th>Action</th>
 
 
 </tr>
@@ -1737,18 +1206,6 @@ $badge="primary";
 
 }
 
-elseif($status=="Checked In"){
-
-$badge="info";
-
-}
-
-elseif($status=="Checked Out"){
-
-$badge="secondary";
-
-}
-
 else{
 
 $badge="warning";
@@ -1781,124 +1238,6 @@ $badge="warning";
 
 
 
-<td>
-
-
-
-<form method="POST"
-
-onsubmit="return confirm('Update booking status?');">
-
-
-
-<input type="hidden"
-
-name="csrf_token"
-
-value="<?=$_SESSION['csrf_token']?>">
-
-
-
-<input type="hidden"
-
-name="booking_id"
-
-value="<?=$b['booking_id']?>">
-
-
-
-<input type="hidden"
-
-name="update_booking_status"
-
-value="1">
-
-
-
-
-
-
-<select name="booking_status"
-
-class="form-select form-select-sm"
-
-onchange="this.form.submit()">
-
-
-
-<option value="Pending"
-
-<?=$status=="Pending"?'selected':''?>>
-
-Pending
-
-</option>
-
-
-
-
-
-<option value="Confirmed"
-
-<?=$status=="Confirmed"?'selected':''?>>
-
-Confirmed
-
-</option>
-
-
-
-<option value="Checked In"
-
-<?=$status=="Checked In"?'selected':''?>>
-
-Checked In
-
-</option>
-
-<option value="Checked Out"
-
-<?=$status=="Checked Out"?'selected':''?>>
-
-Checked Out
-
-</option>
-
-
-<option value="Completed"
-
-<?=$status=="Completed"?'selected':''?>>
-
-Completed
-
-</option>
-
-
-
-
-
-<option value="Cancelled"
-
-<?=$status=="Cancelled"?'selected':''?>>
-
-Cancelled
-
-</option>
-
-
-
-</select>
-
-
-
-</form>
-
-
-</td>
-
-
-
-
 </tr>
 
 
@@ -1913,7 +1252,7 @@ Cancelled
 <tr>
 
 
-<td colspan="7"
+<td colspan="6"
 
 class="text-center text-muted py-4">
 

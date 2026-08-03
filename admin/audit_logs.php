@@ -561,6 +561,8 @@ gap:15px;
 </style>
 
 
+
+<link rel="stylesheet" href="../assets/css/admin-sidebar.css?v=2">
 </head>
 
 
@@ -574,123 +576,7 @@ gap:15px;
 
 <!-- SIDEBAR -->
 
-<div class="sidebar">
-
-
-<div class="brand">
-
-<i class="fa-solid fa-hotel"></i>
-
-HBS V3 Admin
-
-</div>
-
-
-
-<a href="dashboard.php">
-
-<i class="fa-solid fa-chart-line"></i>
-Dashboard
-
-</a>
-
-
-<a href="users.php">
-
-<i class="fa-solid fa-users"></i>
-Users
-
-</a>
-
-
-<a href="owners.php">
-
-<i class="fa-solid fa-user-tie"></i>
-Hotel Owners
-
-</a>
-
-
-<a href="hotels.php">
-
-<i class="fa-solid fa-hotel"></i>
-Hotels
-
-</a>
-
-
-<a href="rooms.php">
-
-<i class="fa-solid fa-bed"></i>
-Rooms
-
-</a>
-
-
-<a href="bookings.php">
-
-<i class="fa-solid fa-calendar-check"></i>
-Bookings
-
-</a>
-
-
-<a href="payments.php">
-
-<i class="fa-solid fa-credit-card"></i>
-Payments
-
-</a>
-
-
-<a href="reviews.php">
-
-<i class="fa-solid fa-star"></i>
-Reviews
-
-</a>
-
-
-<a href="notifications.php">
-
-<i class="fa-solid fa-bell"></i>
-Notifications
-
-</a>
-
-
-
-<div class="active">
-
-<a href="audit_logs.php">
-
-<i class="fa-solid fa-clock-rotate-left"></i>
-Audit Logs
-
-</a>
-
-</div>
-
-
-
-<a href="../logout.php">
-
-<i class="fa-solid fa-right-from-bracket"></i>
-Logout
-
-</a>
-
-
-
-</div>
-
-
-
-
-
-
-<!-- MAIN CONTENT -->
-
+<?php include __DIR__ . '/../includes/admin_sidebar.php'; ?>
 
 <main class="main-content">
 

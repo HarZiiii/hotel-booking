@@ -99,5 +99,6 @@ require_once 'config/config.php';
             color: #ffffff;
         }
     </style>
+    <link href="assets/css/site-modern.css" rel="stylesheet">
 </head>
 <body>

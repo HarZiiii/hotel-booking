@@ -1,2716 +1,442 @@
 <?php
-
 require_once '../config/config.php';
 
-
-/*
-===========================================
-1. SESSION & OWNER AUTHENTICATION
-===========================================
-*/
-
-if(session_status() === PHP_SESSION_NONE){
-
+if (session_status() === PHP_SESSION_NONE) {
     session_start();
-
 }
 
-
-
-if(
-    !isset($_SESSION['user_id']) ||
-    !isset($_SESSION['role']) ||
-    $_SESSION['role'] !== 'owner'
-){
-
-    header("Location: ../login.php");
-    exit();
-
+if (!isset($_SESSION['user_id'], $_SESSION['role']) || $_SESSION['role'] !== 'owner') {
+    header('Location: ../login.php');
+    exit;
 }
 
+$owner_id = (int) $_SESSION['user_id'];
+$error_msg = '';
+$success_msg = isset($_GET['msg']) && $_GET['msg'] === 'success'
+    ? 'Commission payment slip submitted successfully. Admin verification is pending.'
+    : '';
 
-
-$owner_id = $_SESSION['user_id'];
-
-$error_msg = "";
-
-
-
-
-
-
-
-
-/*
-===========================================
-2. CSRF TOKEN
-===========================================
-*/
-
-
-if(empty($_SESSION['csrf_token'])){
-
-
-    $_SESSION['csrf_token'] =
-    bin2hex(random_bytes(32));
-
-
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-
-
-
-
-
-
-
-
-/*
-===========================================
-3. AUDIT LOG FUNCTION
-===========================================
-*/
-
-
-function insertOwnerAuditLog(
-
-    $conn,
-    $user_id,
-    $action,
-    $table_name,
-    $record_id
-
-){
-
-
-    $ip =
-    $_SERVER['REMOTE_ADDR']
-    ??
-    '127.0.0.1';
-
-
-    $agent =
-    $_SERVER['HTTP_USER_AGENT']
-    ??
-    'Unknown';
-
-
-
-
-
-    $stmt = mysqli_prepare(
-
-        $conn,
-
-        "
-
-        INSERT INTO audit_logs
-
-        (
-
-        user_id,
-        action,
-        table_name,
-        record_id,
-        ip_address,
-        user_agent
-
-        )
-
-
-        VALUES
-
-        (?,?,?,?,?,?)
-
-        "
-
-    );
-
-
-
-
-
-    mysqli_stmt_bind_param(
-
-        $stmt,
-
-        "ississ",
-
-        $user_id,
-
-        $action,
-
-        $table_name,
-
-        $record_id,
-
-        $ip,
-
-        $agent
-
-    );
-
-
-
+function ownerAuditLog(mysqli $conn, int $userId, string $action, string $tableName, int $recordId = 0): void
+{
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    $agent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
+    $stmt = mysqli_prepare($conn, "INSERT INTO audit_logs (user_id, action, table_name, record_id, ip_address, user_agent) VALUES (?,?,?,?,?,?)");
+    if (!$stmt) {
+        return;
+    }
+    mysqli_stmt_bind_param($stmt, 'ississ', $userId, $action, $tableName, $recordId, $ip, $agent);
     mysqli_stmt_execute($stmt);
-
-
+    mysqli_stmt_close($stmt);
 }
 
-
-
-
-
-
-
-
-
-/*
-===========================================
-4. COMMISSION PAYMENT SUBMISSION
-===========================================
-*/
-
-
-if(
-    $_SERVER['REQUEST_METHOD']==='POST'
-    &&
-    isset($_POST['pay_commission'])
-){
-
-
-
-    if(
-        !isset($_POST['csrf_token'])
-        ||
-        !hash_equals(
-
-            $_SESSION['csrf_token'],
-
-            $_POST['csrf_token']
-
-        )
-    ){
-
-        die("Invalid CSRF Token");
-
+function fetchMoney(mysqli $conn, string $sql, int $ownerId): float
+{
+    $stmt = mysqli_prepare($conn, $sql);
+    if (!$stmt) {
+        return 0.0;
     }
-
-
-
-
-
-
-    $commission_amount =
-
-    floatval(
-
-        $_POST['commission_amount'] ?? 0
-
-    );
-
-
-
-
-
-
-    if($commission_amount <= 0){
-
-        $error_msg =
-        "Invalid commission amount.";
-
-    }
-
-    else{
-
-
-
-        /*
-        ===========================
-        FILE UPLOAD VALIDATION
-        ===========================
-        */
-
-
-        $allowed_extensions = [
-
-            'jpg',
-            'jpeg',
-            'png',
-            'webp'
-
-        ];
-
-
-
-        $max_size =
-
-        2 * 1024 * 1024;
-
-
-
-        $slip_img = "";
-
-
-
-
-
-
-        if(
-            isset($_FILES['payment_slip'])
-            &&
-            $_FILES['payment_slip']['error']
-            ===
-            UPLOAD_ERR_OK
-        ){
-
-
-
-            $file_tmp =
-
-            $_FILES['payment_slip']['tmp_name'];
-
-
-
-            $file_size =
-
-            $_FILES['payment_slip']['size'];
-
-
-
-            $original_name =
-
-            $_FILES['payment_slip']['name'];
-
-
-
-            $extension =
-
-            strtolower(
-
-                pathinfo(
-
-                    $original_name,
-
-                    PATHINFO_EXTENSION
-
-                )
-
-            );
-
-
-
-
-
-
-            $mime =
-
-            mime_content_type(
-
-                $file_tmp
-
-            );
-
-
-
-
-
-            $allowed_mime = [
-
-                'image/jpeg',
-                'image/png',
-                'image/webp'
-
-            ];
-
-
-
-
-
-
-
-            if(
-
-                !in_array(
-
-                    $extension,
-
-                    $allowed_extensions
-
-                )
-
-                ||
-
-                !in_array(
-
-                    $mime,
-
-                    $allowed_mime
-
-                )
-
-                ||
-
-                $file_size > $max_size
-
-            ){
-
-
-                $error_msg =
-
-                "Invalid payment slip file.";
-
-            }
-
-            else{
-
-
-
-                $upload_dir =
-
-                "../assets/images/slips/";
-
-
-
-                if(!is_dir($upload_dir)){
-
-
-                    mkdir(
-
-                        $upload_dir,
-
-                        0755,
-
-                        true
-
-                    );
-
-
-                }
-
-
-
-
-
-                $new_name =
-
-                time()
-
-                .
-
-                "_"
-
-                .
-
-                bin2hex(
-
-                    random_bytes(5)
-
-                )
-
-                .
-
-                "."
-
-                .
-
-                $extension;
-
-
-
-
-
-
-                if(
-                    move_uploaded_file(
-
-                        $file_tmp,
-
-                        $upload_dir.$new_name
-
-                    )
-                ){
-
-
-                    $slip_img = $new_name;
-
-
-                }
-
-
-            }
-
-
-        }
-
-        else{
-
-
-            $error_msg =
-
-            "Please upload payment slip.";
-
-
-        }
-
-
-
-
-
-
-
-
-
-        /*
-        ===========================
-        CREATE COMMISSION RECORD
-        ===========================
-        */
-
-
-
-        if(
-            empty($error_msg)
-            &&
-            !empty($slip_img)
-        ){
-
-
-
-
-
-            $booking_stmt = mysqli_prepare(
-
-                $conn,
-
-                "
-
-                SELECT
-
-
-                b.booking_id,
-
-                b.total_amount
-
-
-
-                FROM bookings b
-
-
-
-                LEFT JOIN hotels h
-
-                ON b.hotel_id=h.hotel_id
-
-
-
-                WHERE
-
-                h.owner_id=?
-
-                AND
-
-                b.booking_status
-
-                IN
-
-                ('Confirmed','Checked Out')
-
-
-
-                AND b.booking_id NOT IN
-
-                (
-
-                SELECT booking_id
-
-                FROM commissions
-
-                WHERE owner_id=?
-
-                )
-
-
-                "
-
-            );
-
-
-
-
-
-            mysqli_stmt_bind_param(
-
-                $booking_stmt,
-
-                "ii",
-
-                $owner_id,
-
-                $owner_id
-
-            );
-
-
-
-            mysqli_stmt_execute(
-
-                $booking_stmt
-
-            );
-
-
-
-            $booking_result =
-
-            mysqli_stmt_get_result(
-
-                $booking_stmt
-
-            );
-
-
-
-
-
-
-
-            while(
-
-                $booking =
-
-                mysqli_fetch_assoc(
-
-                    $booking_result
-
-                )
-
-            ){
-
-
-
-                $booking_id =
-
-                $booking['booking_id'];
-
-
-
-                $booking_amount =
-
-                $booking['total_amount'];
-
-
-
-                $commission_rate =
-
-                10.00;
-
-
-
-                $commission_value =
-
-                $booking_amount * 0.10;
-
-
-
-                $owner_amount =
-
-                $booking_amount
-
-                -
-
-                $commission_value;
-
-
-
-
-
-
-
-
-                $insert_stmt = mysqli_prepare(
-
-                    $conn,
-
-                    "
-
-                    INSERT INTO commissions
-
-                    (
-
-                    booking_id,
-
-                    owner_id,
-
-                    booking_amount,
-
-                    commission_rate,
-
-                    commission_amount,
-
-                    owner_amount,
-
-                    commission_status,
-
-                    payment_slip
-
-                    )
-
-
-                    VALUES
-
-                    (?,?,?,?,?,?, 'Pending', ?)
-
-
-                    "
-
-                );
-
-
-
-
-
-                mysqli_stmt_bind_param(
-
-                    $insert_stmt,
-
-                    "iidddds",
-
-                    $booking_id,
-
-                    $owner_id,
-
-                    $booking_amount,
-
-                    $commission_rate,
-
-                    $commission_value,
-
-                    $owner_amount,
-
-                    $slip_img
-
-                );
-
-
-
-                mysqli_stmt_execute(
-
-                    $insert_stmt
-
-                );
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-            /*
-            ===========================
-            NOTIFY ADMIN
-            ===========================
-            */
-
-
-            $admin_notify = mysqli_query(
-
-                $conn,
-
-                "
-
-                SELECT user_id
-
-                FROM users
-
-                WHERE role='admin'
-
-                LIMIT 1
-
-                "
-
-            );
-
-
-
-
-            if($admin_notify){
-
-
-                $admin =
-
-                mysqli_fetch_assoc(
-
-                    $admin_notify
-
-                );
-
-
-
-
-                if($admin){
-
-
-
-                    $title =
-
-                    "Commission Payment Submitted";
-
-
-
-                    $message =
-
-                    "Hotel owner submitted commission payment slip.";
-
-
-
-
-
-                    $notify_stmt = mysqli_prepare(
-
-                        $conn,
-
-                        "
-
-                        INSERT INTO notifications
-
-                        (
-
-                        user_id,
-
-                        title,
-
-                        message,
-
-                        notification_type
-
-                        )
-
-
-                        VALUES
-
-                        (?,?,?,'Commission')
-
-
-                        "
-
-                    );
-
-
-
-
-
-                    mysqli_stmt_bind_param(
-
-                        $notify_stmt,
-
-                        "iss",
-
-                        $admin['user_id'],
-
-                        $title,
-
-                        $message
-
-                    );
-
-
-
-                    mysqli_stmt_execute(
-
-                        $notify_stmt
-
-                    );
-
-
-
-                }
-
-
-            }
-
-
-
-
-
-
-
-            insertOwnerAuditLog(
-
-                $conn,
-
-                $owner_id,
-
-                "COMMISSION_PAYMENT_SUBMITTED",
-
-                "commissions",
-
-                0
-
-            );
-
-
-
-
-
-
-
-            header(
-
-                "Location: earnings.php?msg=success"
-
-            );
-
-
-            exit();
-
-
-        }
-
-
-
-    }
-
-
-
+    mysqli_stmt_bind_param($stmt, 'i', $ownerId);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $row = $result ? mysqli_fetch_assoc($result) : null;
+    mysqli_stmt_close($stmt);
+    return (float) ($row['amount'] ?? 0);
 }
 
-
-
-
-
-
-
-
-
-/*
-===========================================
-5. TOTAL REVENUE
-===========================================
-*/
-
-
-$revenue_stmt = mysqli_prepare(
-
+// Revenue belonging to this owner's confirmed / checked-out bookings.
+$gross_revenue = fetchMoney(
     $conn,
-
-    "
-
-    SELECT
-
-    SUM(b.total_amount) grand_total
-
-
-
-    FROM bookings b
-
-
-
-    LEFT JOIN hotels h
-
-    ON b.hotel_id=h.hotel_id
-
-
-
-    WHERE h.owner_id=?
-
-
-
-    AND b.booking_status
-
-    IN
-
-    ('Confirmed','Checked Out')
-
-
-    "
-
-);
-
-
-
-mysqli_stmt_bind_param(
-
-    $revenue_stmt,
-
-    "i",
-
+    "SELECT COALESCE(SUM(b.total_amount),0) AS amount
+     FROM bookings b
+     INNER JOIN hotels h ON h.hotel_id=b.hotel_id
+     WHERE h.owner_id=? AND b.booking_status IN ('Confirmed','Checked Out')",
     $owner_id
-
 );
 
+$total_commission = round($gross_revenue * 0.10, 2);
+$net_owner_earnings = max(0, $gross_revenue - $total_commission);
 
-
-mysqli_stmt_execute(
-
-    $revenue_stmt
-
-);
-
-
-
-$revenue_result =
-
-mysqli_stmt_get_result(
-
-    $revenue_stmt
-
-);
-
-
-
-$grand_total =
-
-mysqli_fetch_assoc(
-
-    $revenue_result
-
-)['grand_total'] ?? 0;
-
-
-
-
-
-
-
-
-
-/*
-===========================================
-6. COMMISSION CALCULATION
-===========================================
-*/
-
-
-$total_commission =
-
-$grand_total * 0.10;
-
-
-
-
-
-
-$paid_stmt = mysqli_prepare(
-
-$conn,
-
-"
-
-SELECT
-
-SUM(commission_amount) paid_total
-
-FROM commissions
-
-WHERE owner_id=?
-
-AND commission_status IN
-('Pending','Paid')
-
-"
-
-);
-
-
-
-mysqli_stmt_bind_param(
-
-    $paid_stmt,
-
-    "i",
-
+$submitted_commission = fetchMoney(
+    $conn,
+    "SELECT COALESCE(SUM(commission_amount),0) AS amount FROM commissions WHERE owner_id=?",
     $owner_id
-
 );
 
-
-
-mysqli_stmt_execute(
-
-    $paid_stmt
-
+$paid_commission = fetchMoney(
+    $conn,
+    "SELECT COALESCE(SUM(commission_amount),0) AS amount FROM commissions WHERE owner_id=? AND commission_status='Paid'",
+    $owner_id
 );
 
-
-
-$paid_result =
-
-mysqli_stmt_get_result(
-
-    $paid_stmt
-
+$pending_commission = fetchMoney(
+    $conn,
+    "SELECT COALESCE(SUM(commission_amount),0) AS amount FROM commissions WHERE owner_id=? AND commission_status='Pending'",
+    $owner_id
 );
 
-
-
-$already_submitted =
-
-mysqli_fetch_assoc(
-
-    $paid_result
-
-)['paid_total'] ?? 0;
-
-
-
-
-
-$remaining_commission =
-
-max(
-
-    0,
-
-    $total_commission - $already_submitted
-
+// Always calculate what can be submitted from booking rows that do not yet have commission records.
+$outstanding_stmt = mysqli_prepare(
+    $conn,
+    "SELECT b.booking_id, b.booking_code, b.total_amount, h.hotel_name
+     FROM bookings b
+     INNER JOIN hotels h ON h.hotel_id=b.hotel_id
+     LEFT JOIN commissions c ON c.booking_id=b.booking_id AND c.owner_id=?
+     WHERE h.owner_id=?
+       AND b.booking_status IN ('Confirmed','Checked Out')
+       AND c.commission_id IS NULL
+     ORDER BY b.booking_id ASC"
 );
+$outstanding_bookings = [];
+$unsubmitted_commission = 0.0;
+if ($outstanding_stmt) {
+    mysqli_stmt_bind_param($outstanding_stmt, 'ii', $owner_id, $owner_id);
+    mysqli_stmt_execute($outstanding_stmt);
+    $outstanding_result = mysqli_stmt_get_result($outstanding_stmt);
+    while ($outstanding_result && ($row = mysqli_fetch_assoc($outstanding_result))) {
+        $row['commission_amount'] = round(((float)$row['total_amount']) * 0.10, 2);
+        $unsubmitted_commission += $row['commission_amount'];
+        $outstanding_bookings[] = $row;
+    }
+    mysqli_stmt_close($outstanding_stmt);
+}
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay_commission'])) {
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], (string)$_POST['csrf_token'])) {
+        $error_msg = 'Invalid request token. Please refresh and try again.';
+    } elseif ($unsubmitted_commission <= 0 || empty($outstanding_bookings)) {
+        $error_msg = 'There is no new commission available to submit.';
+    } elseif (!isset($_FILES['payment_slip']) || $_FILES['payment_slip']['error'] !== UPLOAD_ERR_OK) {
+        $error_msg = 'Please choose a payment slip image.';
+    } else {
+        $file = $_FILES['payment_slip'];
+        $maxSize = 2 * 1024 * 1024;
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+        $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        $mime = function_exists('mime_content_type') ? mime_content_type($file['tmp_name']) : '';
 
+        if ($file['size'] <= 0 || $file['size'] > $maxSize || !in_array($extension, $allowedExtensions, true) || !in_array($mime, $allowedMimes, true)) {
+            $error_msg = 'Payment slip must be a JPG, PNG or WEBP image under 2 MB.';
+        } else {
+            $uploadDir = '../assets/images/slips/';
+            if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true)) {
+                $error_msg = 'Unable to create the payment slip folder.';
+            } else {
+                $newName = date('YmdHis') . '_' . bin2hex(random_bytes(6)) . '.' . $extension;
+                $destination = $uploadDir . $newName;
 
+                if (!move_uploaded_file($file['tmp_name'], $destination)) {
+                    $error_msg = 'Unable to save the payment slip. Please check folder permissions.';
+                } else {
+                    mysqli_begin_transaction($conn);
+                    try {
+                        $insert = mysqli_prepare(
+                            $conn,
+                            "INSERT INTO commissions
+                             (booking_id, owner_id, amount, payment_slip, booking_amount, commission_rate, commission_amount, owner_amount, commission_status)
+                             VALUES (?,?,0,?,?,?,?,?,'Pending')"
+                        );
+                        if (!$insert) {
+                            throw new Exception(mysqli_error($conn));
+                        }
 
-$net_owner_earnings =
+                        $inserted = 0;
+                        foreach ($outstanding_bookings as $booking) {
+                            $bookingId = (int)$booking['booking_id'];
+                            $bookingAmount = (float)$booking['total_amount'];
+                            $commissionRate = 10.00;
+                            $commissionAmount = round($bookingAmount * 0.10, 2);
+                            $ownerAmount = round($bookingAmount - $commissionAmount, 2);
 
-$grand_total - $total_commission;
+                            mysqli_stmt_bind_param(
+                                $insert,
+                                'iisdddd',
+                                $bookingId,
+                                $owner_id,
+                                $newName,
+                                $bookingAmount,
+                                $commissionRate,
+                                $commissionAmount,
+                                $ownerAmount
+                            );
+                            if (!mysqli_stmt_execute($insert)) {
+                                throw new Exception(mysqli_stmt_error($insert));
+                            }
+                            $inserted++;
+                        }
+                        mysqli_stmt_close($insert);
 
+                        if ($inserted < 1) {
+                            throw new Exception('No commission rows were created.');
+                        }
 
+                        $adminResult = mysqli_query($conn, "SELECT user_id FROM users WHERE role='admin' AND status='active' ORDER BY user_id ASC LIMIT 1");
+                        if ($adminResult && ($admin = mysqli_fetch_assoc($adminResult))) {
+                            $adminId = (int)$admin['user_id'];
+                            $title = 'Commission Payment Submitted';
+                            $message = 'A hotel owner submitted a commission payment slip for ' . number_format($unsubmitted_commission, 2) . ' MMK.';
+                            $notify = mysqli_prepare($conn, "INSERT INTO notifications (user_id,title,message,notification_type) VALUES (?,?,?,'System')");
+                            if ($notify) {
+                                mysqli_stmt_bind_param($notify, 'iss', $adminId, $title, $message);
+                                mysqli_stmt_execute($notify);
+                                mysqli_stmt_close($notify);
+                            }
+                        }
 
+                        ownerAuditLog($conn, $owner_id, 'COMMISSION_PAYMENT_SUBMITTED', 'commissions', 0);
+                        mysqli_commit($conn);
+                        header('Location: earnings.php?msg=success');
+                        exit;
+                    } catch (Throwable $e) {
+                        mysqli_rollback($conn);
+                        if (is_file($destination)) {
+                            @unlink($destination);
+                        }
+                        $error_msg = 'Commission submission failed. Please try again.';
+                    }
+                }
+            }
+        }
+    }
+}
 
-
-
-
-
-
-/*
-===========================================
-7. HOTEL EARNINGS BREAKDOWN
-===========================================
-*/
-
-
+// Per-hotel summary.
 $earnings_stmt = mysqli_prepare(
-
     $conn,
-
-    "
-
-    SELECT
-
-
-    h.hotel_name,
-
-
-    COUNT(b.booking_id) total_bookings,
-
-
-    SUM(
-
-    CASE
-
-    WHEN b.booking_status IN
-
-    ('Confirmed','Checked Out')
-
-    THEN b.total_amount
-
-    ELSE 0
-
-    END
-
-    ) total_revenue
-
-
-
-    FROM hotels h
-
-
-
-    LEFT JOIN bookings b
-
-    ON h.hotel_id=b.hotel_id
-
-
-
-    WHERE h.owner_id=?
-
-
-
-    GROUP BY h.hotel_id
-
-
-    "
-
+    "SELECT h.hotel_id, h.hotel_name,
+            COUNT(CASE WHEN b.booking_status IN ('Confirmed','Checked Out') THEN 1 END) AS eligible_bookings,
+            COALESCE(SUM(CASE WHEN b.booking_status IN ('Confirmed','Checked Out') THEN b.total_amount ELSE 0 END),0) AS total_revenue
+     FROM hotels h
+     LEFT JOIN bookings b ON b.hotel_id=h.hotel_id
+     WHERE h.owner_id=?
+     GROUP BY h.hotel_id, h.hotel_name
+     ORDER BY h.hotel_name ASC"
 );
+mysqli_stmt_bind_param($earnings_stmt, 'i', $owner_id);
+mysqli_stmt_execute($earnings_stmt);
+$earnings_query = mysqli_stmt_get_result($earnings_stmt);
 
-
-
-mysqli_stmt_bind_param(
-
-    $earnings_stmt,
-
-    "i",
-
-    $owner_id
-
+// Payment history.
+$history_stmt = mysqli_prepare(
+    $conn,
+    "SELECT c.commission_id, c.booking_amount, c.commission_amount, c.commission_status,
+            c.payment_slip, c.created_at, b.booking_code, h.hotel_name
+     FROM commissions c
+     LEFT JOIN bookings b ON b.booking_id=c.booking_id
+     LEFT JOIN hotels h ON h.hotel_id=b.hotel_id
+     WHERE c.owner_id=?
+     ORDER BY c.commission_id DESC"
 );
-
-
-
-mysqli_stmt_execute(
-
-    $earnings_stmt
-
-);
-
-
-
-$earnings_query =
-
-mysqli_stmt_get_result(
-
-    $earnings_stmt
-
-);
-
-
-
+mysqli_stmt_bind_param($history_stmt, 'i', $owner_id);
+mysqli_stmt_execute($history_stmt);
+$commission_history = mysqli_stmt_get_result($history_stmt);
 ?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
 <meta charset="UTF-8">
-
-<title>Earnings & Commission | Hotel Partner Hub</title>
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-
+<title>Earnings & Commission | StayFlow Partner</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
-
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-
-
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-
-
-<style>
-
-
-body{
-
-font-family:'Poppins',sans-serif;
-
-background:#f4f6f9;
-
-color:#333;
-
-}
-
-
-
-.wrapper{
-
-display:flex;
-
-min-height:100vh;
-
-}
-
-
-
-.sidebar{
-
-width:260px;
-
-background:#0f172a;
-
-color:white;
-
-position:fixed;
-
-top:0;
-
-bottom:0;
-
-left:0;
-
-overflow-y:auto;
-
-}
-
-
-
-.brand{
-
-padding:20px;
-
-font-size:19px;
-
-font-weight:700;
-
-color:#38bdf8;
-
-border-bottom:1px solid #1e293b;
-
-display:flex;
-
-align-items:center;
-
-gap:10px;
-
-}
-
-
-
-.sidebar ul{
-
-list-style:none;
-
-padding:10px 0;
-
-margin:0;
-
-}
-
-
-
-.sidebar ul li a{
-
-display:flex;
-
-align-items:center;
-
-gap:12px;
-
-padding:12px 20px;
-
-color:#94a3b8;
-
-text-decoration:none;
-
-font-size:14px;
-
-}
-
-
-
-.sidebar ul li a:hover,
-.sidebar ul li.active a{
-
-background:#1e293b;
-
-color:#38bdf8;
-
-border-left:4px solid #38bdf8;
-
-}
-
-
-
-.main-content{
-
-margin-left:260px;
-
-width:calc(100% - 260px);
-
-padding:25px 30px;
-
-}
-
-
-
-.topbar{
-
-background:#fff;
-
-padding:18px 25px;
-
-border-radius:12px;
-
-box-shadow:0 2px 12px rgba(0,0,0,.04);
-
-margin-bottom:25px;
-
-display:flex;
-
-justify-content:space-between;
-
-align-items:center;
-
-}
-
-
-
-.card-box{
-
-background:#fff;
-
-border-radius:12px;
-
-padding:22px;
-
-box-shadow:0 2px 10px rgba(0,0,0,.03);
-
-border:1px solid #eef2f6;
-
-margin-bottom:25px;
-
-}
-
-
-
-.finance-card{
-
-padding:25px;
-
-border-radius:15px;
-
-color:white;
-
-height:100%;
-
-}
-
-
-
-.table td{
-
-vertical-align:middle;
-
-}
-
-
-
-@media(max-width:768px){
-
-
-.sidebar{
-
-position:relative;
-
-width:100%;
-
-}
-
-
-
-.wrapper{
-
-display:block;
-
-}
-
-
-
-.main-content{
-
-margin-left:0;
-
-width:100%;
-
-padding:15px;
-
-}
-
-
-
-.topbar{
-
-flex-direction:column;
-
-gap:15px;
-
-}
-
-
-
-}
-
-
-
-</style>
-
 <link href="../assets/css/owner.css" rel="stylesheet">
+<style>
+/* Earnings page owns its layout so it cannot collide with legacy owner-page CSS. */
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;overflow-x:hidden}
+body.earnings-page{background:#f4f7fb!important}
+.earnings-page .wrapper{display:block!important;width:100%!important;min-height:100vh!important}
+.earnings-page .sidebar{position:fixed!important;inset:0 auto 0 0!important;width:270px!important;height:100vh!important;overflow-y:auto!important;z-index:1040!important;padding:12px!important}
+.earnings-page .sidebar .brand{display:flex!important;align-items:center!important;gap:10px!important}
+.earnings-page .sidebar ul{list-style:none!important;margin:0!important;padding:4px 0!important}
+.earnings-page .sidebar ul li{display:block!important;width:100%!important}
+.earnings-page .sidebar ul li a{display:flex!important;align-items:center!important;gap:11px!important;width:100%!important;text-decoration:none!important}
+.earnings-page .main-content{display:block!important;margin:0 0 0 270px!important;width:calc(100% - 270px)!important;min-width:0!important;max-width:none!important;padding:26px 30px!important;overflow:visible!important}
+.earnings-page .main-content> *{max-width:100%!important}
+.earnings-page .topbar{width:100%!important;background:#fff!important;margin:0 0 22px!important}
+.earnings-head{display:flex;justify-content:space-between;gap:16px;align-items:center}
+.finance-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;width:100%!important;margin:0 0 22px!important;padding:0!important}
+.finance-card{min-width:0;background:#fff;border:1px solid #e4e9f1;border-radius:18px;padding:20px;position:relative;overflow:hidden;box-shadow:0 5px 18px rgba(30,48,80,.045)}
+.finance-card:after{content:"";position:absolute;width:90px;height:90px;border-radius:50%;right:-35px;top:-35px;background:rgba(11,114,231,.06)}
+.finance-icon{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;margin-bottom:18px;font-size:18px}
+.finance-label{font-size:11px;color:#738096;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.finance-value{font-size:clamp(18px,1.45vw,24px);line-height:1.25;font-weight:700;margin-top:5px;color:#172033;overflow-wrap:anywhere}
+.finance-note{font-size:11px;line-height:1.5;color:#8b95a6;margin-top:6px}
+.icon-blue{background:#eaf3ff;color:#0b72e7}.icon-green{background:#e9f8ef;color:#198754}.icon-orange{background:#fff3df;color:#d47a00}.icon-purple{background:#f1edff;color:#6f42c1}
+.earnings-page .card-box{display:block!important;width:100%!important;min-width:0!important;background:#fff;border:1px solid #e4e9f1;border-radius:18px;padding:22px!important;margin:0 0 22px!important;box-shadow:0 5px 18px rgba(30,48,80,.045)}
+.earnings-page .settlement-card{background:linear-gradient(135deg,#071a38,#0b315f)!important;color:#fff!important;border:0!important;padding:24px!important}
+.settlement-card .text-muted{color:#b9c7db!important}.settlement-amount{font-size:30px;font-weight:700}.soft-panel{background:#f7f9fc;border:1px solid #e8edf4;border-radius:14px;padding:16px}
+.status-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}.status-paid{background:#e9f8ef;color:#137a43}.status-pending{background:#fff3d9;color:#9c6800}.hotel-name{font-weight:600;color:#172033}.money{font-variant-numeric:tabular-nums;white-space:nowrap}
+.earnings-page .table-responsive{width:100%!important;max-width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+.earnings-page .table{width:100%!important;margin:0!important}.table>thead>tr>th{white-space:nowrap}.empty-state{padding:34px;text-align:center;color:#8290a3}.empty-state i{font-size:28px;margin-bottom:10px}.upload-hint{font-size:11px;color:#8d98a9;margin-top:7px}
+@media(max-width:1250px){.finance-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.earnings-page .sidebar{position:relative!important;width:100%!important;height:auto!important;inset:auto!important}.earnings-page .sidebar ul{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}.earnings-page .main-content{margin-left:0!important;width:100%!important;padding:18px!important}}
+@media(max-width:640px){.finance-grid{grid-template-columns:1fr}.earnings-head{align-items:flex-start;flex-direction:column}.earnings-head .btn{width:100%}.settlement-amount{font-size:25px}.earnings-page .sidebar ul{grid-template-columns:1fr}.earnings-page .main-content{padding:12px!important}.earnings-page .card-box,.earnings-page .settlement-card{padding:16px!important}}
+</style>
 </head>
-
-
-
-
-<body>
-
-
-
+<body class="earnings-page">
 <div class="wrapper">
-
-
-
-
 <?php include '../includes/owner_sidebar.php'; ?>
-
-
-
-
-
-
-
-
-
 <main class="main-content">
-
-
-
-
-
-
-
-<!-- TOP BAR -->
-
-
-<header class="topbar">
-
-
-<div>
-
-
-<h4 class="fw-bold mb-1">
-
-
-<i class="fa-solid fa-wallet text-primary me-2"></i>
-
-
-Earnings & Commission Report
-
-
-</h4>
-
-
-
-<small class="text-muted">
-
-Financial breakdown and platform fee settlements
-
-</small>
-
-
-</div>
-
-
-
-
-
-<div>
-
-
-<a href="notifications.php"
-
-class="btn btn-light rounded-circle">
-
-
-<i class="fa-solid fa-bell"></i>
-
-
-</a>
-
-
-</div>
-
-
-
+<header class="topbar earnings-head">
+    <div>
+        <div class="text-primary fw-semibold small mb-1">FINANCE CENTER</div>
+        <h4 class="fw-bold mb-1"><i class="fa-solid fa-wallet text-primary me-2"></i>Earnings & Commission</h4>
+        <small class="text-muted">Track property sales, platform commission and settlement status.</small>
+    </div>
+    <a href="dashboard.php" class="btn btn-outline-primary"><i class="fa-solid fa-arrow-left me-2"></i>Dashboard</a>
 </header>
 
-
-
-
-
-
-
-
-
-<!-- ALERTS -->
-
-
-<?php if(isset($_GET['msg']) && $_GET['msg']=="success"): ?>
-
-
-<div class="alert alert-success">
-
-
-<i class="fa-solid fa-circle-check me-2"></i>
-
-
-Commission payment slip submitted successfully.
-
-
-</div>
-
-
+<?php if ($success_msg): ?>
+<div class="alert alert-success border-0 shadow-sm"><i class="fa-solid fa-circle-check me-2"></i><?= htmlspecialchars($success_msg) ?></div>
+<?php endif; ?>
+<?php if ($error_msg): ?>
+<div class="alert alert-danger border-0 shadow-sm"><i class="fa-solid fa-triangle-exclamation me-2"></i><?= htmlspecialchars($error_msg) ?></div>
 <?php endif; ?>
 
+<section class="finance-grid">
+    <div class="finance-card">
+        <div class="finance-icon icon-green"><i class="fa-solid fa-chart-line"></i></div>
+        <div class="finance-label">Gross Booking Revenue</div>
+        <div class="finance-value money"><?= number_format($gross_revenue, 2) ?> MMK</div>
+        <div class="finance-note">Confirmed + checked-out bookings</div>
+    </div>
+    <div class="finance-card">
+        <div class="finance-icon icon-orange"><i class="fa-solid fa-percent"></i></div>
+        <div class="finance-label">Platform Commission</div>
+        <div class="finance-value money"><?= number_format($total_commission, 2) ?> MMK</div>
+        <div class="finance-note">10% of eligible booking revenue</div>
+    </div>
+    <div class="finance-card">
+        <div class="finance-icon icon-blue"><i class="fa-solid fa-sack-dollar"></i></div>
+        <div class="finance-label">Owner Net Earnings</div>
+        <div class="finance-value money"><?= number_format($net_owner_earnings, 2) ?> MMK</div>
+        <div class="finance-note">Gross revenue minus platform fee</div>
+    </div>
+    <div class="finance-card">
+        <div class="finance-icon icon-purple"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="finance-label">Commission Paid</div>
+        <div class="finance-value money"><?= number_format($paid_commission, 2) ?> MMK</div>
+        <div class="finance-note"><?= number_format($pending_commission, 2) ?> MMK awaiting admin verification</div>
+    </div>
+</section>
 
-
-
-
-
-
-
-<?php if(!empty($error_msg)): ?>
-
-
-<div class="alert alert-danger">
-
-
-<i class="fa-solid fa-triangle-exclamation me-2"></i>
-
-
-<?=htmlspecialchars($error_msg)?>
-
-
+<div class="card-box settlement-card">
+    <div class="row g-4 align-items-center">
+        <div class="col-lg-5">
+            <div class="small text-uppercase fw-semibold text-muted mb-2">Ready to submit</div>
+            <div class="settlement-amount money"><?= number_format($unsubmitted_commission, 2) ?> MMK</div>
+            <div class="text-muted mt-2 small">
+                <?php if ($unsubmitted_commission > 0): ?>
+                <?= count($outstanding_bookings) ?> booking<?= count($outstanding_bookings) === 1 ? '' : 's' ?> have not been submitted for commission settlement yet.
+                <?php else: ?>
+                There is no new commission payment to submit right now.
+                <?php endif; ?>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <?php if ($unsubmitted_commission > 0): ?>
+            <form action="earnings.php" method="POST" enctype="multipart/form-data" class="soft-panel bg-white text-dark">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-7">
+                        <label class="form-label fw-semibold">Payment Slip <span class="text-danger">*</span></label>
+                        <input type="file" name="payment_slip" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required>
+                        <div class="upload-hint">JPG, PNG or WEBP · maximum 2 MB</div>
+                    </div>
+                    <div class="col-md-5">
+                        <button type="submit" name="pay_commission" class="btn btn-success w-100 py-2"><i class="fa-solid fa-paper-plane me-2"></i>Submit Settlement</button>
+                    </div>
+                </div>
+            </form>
+            <?php else: ?>
+            <div class="soft-panel bg-white text-dark d-flex align-items-center gap-3">
+                <div class="finance-icon icon-green mb-0 flex-shrink-0"><i class="fa-solid fa-check"></i></div>
+                <div><strong>All caught up</strong><div class="text-muted small">New eligible bookings will appear here automatically.</div></div>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
 </div>
-
-
-<?php endif; ?>
-
-
-
-
-
-
-
-
-
-<!-- FINANCE CARDS -->
-
-
-<div class="row g-4 mb-4">
-
-
-
-
-
-<div class="col-md-4">
-
-
-<div class="finance-card bg-success">
-
-
-<small class="fw-semibold">
-
-TOTAL SALES REVENUE
-
-</small>
-
-
-<h3 class="fw-bold mt-2 mb-0">
-
-
-<?=number_format($grand_total,2)?>
-
-MMK
-
-
-</h3>
-
-
-</div>
-
-
-</div>
-
-
-
-
-
-
-
-<div class="col-md-4">
-
-
-<div class="finance-card bg-warning text-dark">
-
-
-<small class="fw-semibold">
-
-REMAINING COMMISSION (10%)
-
-</small>
-
-
-<h3 class="fw-bold mt-2 mb-0">
-
-
-<?=number_format($remaining_commission,2)?>
-
-MMK
-
-
-</h3>
-
-
-</div>
-
-
-</div>
-
-
-
-
-
-
-
-<div class="col-md-4">
-
-
-<div class="finance-card bg-primary">
-
-
-<small class="fw-semibold">
-
-NET OWNER EARNINGS
-
-</small>
-
-
-<h3 class="fw-bold mt-2 mb-0">
-
-
-<?=number_format($net_owner_earnings,2)?>
-
-MMK
-
-
-</h3>
-
-
-</div>
-
-
-</div>
-
-
-
-
-</div>
-
-
-
-
-
-
-
-
-
-<!-- COMMISSION PAYMENT -->
-
-
-<?php if($remaining_commission > 0): ?>
-
 
 <div class="card-box">
-
-
-<h5 class="fw-bold mb-3">
-
-
-<i class="fa-solid fa-money-bill-transfer text-primary me-2"></i>
-
-
-Pay Commission to Admin
-
-
-</h5>
-
-
-
-<p class="text-muted small">
-
-
-Platform commission (10%) payment slip ကို upload ပြုလုပ်ပါ။ Admin မှ စစ်ဆေးပြီး approve ပြုလုပ်ပါမည်။
-
-
-</p>
-
-
-
-
-
-
-
-<form action="earnings.php"
-
-method="POST"
-
-enctype="multipart/form-data"
-
-class="row g-3">
-
-
-
-
-
-<input type="hidden"
-
-name="csrf_token"
-
-value="<?=$_SESSION['csrf_token']?>">
-
-
-
-
-
-<div class="col-md-4">
-
-
-<label class="form-label fw-semibold">
-
-
-Commission Amount (MMK)
-
-
-</label>
-
-
-
-<input type="number"
-
-name="commission_amount"
-
-class="form-control"
-
-value="<?=$remaining_commission?>"
-
-readonly>
-
-
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <h5 class="fw-bold mb-1"><i class="fa-solid fa-building text-primary me-2"></i>Property Earnings</h5>
+            <small class="text-muted">Revenue and commission breakdown for each hotel.</small>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead><tr><th>Hotel</th><th>Eligible Bookings</th><th>Gross Revenue</th><th>Commission 10%</th><th>Net Earnings</th></tr></thead>
+            <tbody>
+            <?php if ($earnings_query && mysqli_num_rows($earnings_query) > 0): ?>
+                <?php while ($e = mysqli_fetch_assoc($earnings_query)): $hotelRevenue=(float)$e['total_revenue']; $hotelCommission=round($hotelRevenue*.10,2); ?>
+                <tr>
+                    <td class="hotel-name"><?= htmlspecialchars($e['hotel_name']) ?></td>
+                    <td><?= number_format((int)$e['eligible_bookings']) ?></td>
+                    <td class="money text-success fw-semibold"><?= number_format($hotelRevenue, 2) ?> MMK</td>
+                    <td class="money text-danger"><?= number_format($hotelCommission, 2) ?> MMK</td>
+                    <td class="money text-primary fw-semibold"><?= number_format($hotelRevenue-$hotelCommission, 2) ?> MMK</td>
+                </tr>
+                <?php endwhile; ?>
+            <?php else: ?>
+                <tr><td colspan="5"><div class="empty-state"><i class="fa-regular fa-folder-open d-block"></i>No hotel earnings data available.</div></td></tr>
+            <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
 </div>
-
-
-
-
-
-
-
-<div class="col-md-4">
-
-
-<label class="form-label fw-semibold">
-
-
-Payment Slip
-
-
-<span class="text-danger">*</span>
-
-
-</label>
-
-
-<input type="file"
-
-name="payment_slip"
-
-class="form-control"
-
-accept=".jpg,.jpeg,.png,.webp"
-
-required>
-
-
-</div>
-
-
-
-
-
-
-
-<div class="col-md-4 d-flex align-items-end">
-
-
-<button type="submit"
-
-name="pay_commission"
-
-class="btn btn-success w-100">
-
-
-<i class="fa-solid fa-paper-plane me-1"></i>
-
-
-Submit Payment
-
-
-</button>
-
-
-</div>
-
-
-
-</form>
-
-
-</div>
-
-
-
-
-
-
-
-<?php else: ?>
-
-
-<div class="alert alert-info">
-
-
-<i class="fa-solid fa-circle-info me-2"></i>
-
-
-All commissions have been submitted.
-
-
-</div>
-
-
-<?php endif; ?>
-
-
-
-
-
-
-
-
-
-<!-- HOTEL BREAKDOWN TABLE -->
-
 
 <div class="card-box">
-
-
-<h5 class="fw-bold mb-3">
-
-
-<i class="fa-solid fa-chart-column text-primary me-2"></i>
-
-
-Revenue Breakdown by Hotel Property
-
-
-</h5>
-
-
-
-
-
-
-
-<div class="table-responsive">
-
-
-<table class="table table-hover align-middle mb-0">
-
-
-<thead class="table-light">
-
-
-<tr>
-
-
-<th>Hotel Name</th>
-
-<th>Total Reservations</th>
-
-<th>Gross Revenue</th>
-
-<th>Commission (10%)</th>
-
-<th>Net Income</th>
-
-
-</tr>
-
-
-</thead>
-
-
-
-
-<tbody>
-
-
-
-
-<?php if($earnings_query && mysqli_num_rows($earnings_query)>0): ?>
-
-
-
-<?php while($e=mysqli_fetch_assoc($earnings_query)): ?>
-
-
-<?php
-
-$hotel_revenue =
-$e['total_revenue'] ?? 0;
-
-
-$hotel_commission =
-$hotel_revenue * 0.10;
-
-
-$hotel_net =
-$hotel_revenue - $hotel_commission;
-
-
-?>
-
-
-
-<tr>
-
-
-<td class="fw-bold">
-
-
-<?=htmlspecialchars($e['hotel_name'])?>
-
-
-</td>
-
-
-
-<td>
-
-
-<?=number_format($e['total_bookings'])?>
-
-
-Bookings
-
-
-</td>
-
-
-
-<td class="text-success fw-bold">
-
-
-<?=number_format($hotel_revenue,2)?>
-
-MMK
-
-
-</td>
-
-
-
-<td class="text-danger fw-bold">
-
-
-<?=number_format($hotel_commission,2)?>
-
-MMK
-
-
-</td>
-
-
-
-<td class="text-primary fw-bold">
-
-
-<?=number_format($hotel_net,2)?>
-
-MMK
-
-
-</td>
-
-
-
-</tr>
-
-
-
-<?php endwhile; ?>
-
-
-
-<?php else: ?>
-
-
-<tr>
-
-
-<td colspan="5"
-
-class="text-center text-muted py-4">
-
-
-No earnings data available.
-
-
-</td>
-
-
-</tr>
-
-
-<?php endif; ?>
-
-
-
-</tbody>
-
-
-</table>
-
-
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <h5 class="fw-bold mb-1"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>Commission History</h5>
+            <small class="text-muted">Each booking gets one commission record, so duplicate submissions are prevented.</small>
+        </div>
+        <div class="d-flex gap-2 small">
+            <span class="status-pill status-pending"><i class="fa-solid fa-clock"></i>Pending <?= number_format($pending_commission,2) ?> MMK</span>
+            <span class="status-pill status-paid"><i class="fa-solid fa-check"></i>Paid <?= number_format($paid_commission,2) ?> MMK</span>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead><tr><th>#</th><th>Booking</th><th>Hotel</th><th>Booking Amount</th><th>Commission</th><th>Status</th><th>Slip</th><th>Submitted</th></tr></thead>
+            <tbody>
+            <?php if ($commission_history && mysqli_num_rows($commission_history) > 0): $no=1; ?>
+                <?php while ($c=mysqli_fetch_assoc($commission_history)): $isPaid=($c['commission_status']==='Paid'); ?>
+                <tr>
+                    <td><?= $no++ ?></td>
+                    <td class="fw-semibold"><?= htmlspecialchars($c['booking_code'] ?: ('#'.$c['commission_id'])) ?></td>
+                    <td><?= htmlspecialchars($c['hotel_name'] ?? '-') ?></td>
+                    <td class="money"><?= number_format((float)$c['booking_amount'],2) ?> MMK</td>
+                    <td class="money fw-semibold"><?= number_format((float)$c['commission_amount'],2) ?> MMK</td>
+                    <td><span class="status-pill <?= $isPaid?'status-paid':'status-pending' ?>"><i class="fa-solid <?= $isPaid?'fa-check':'fa-clock' ?>"></i><?= htmlspecialchars($c['commission_status']) ?></span></td>
+                    <td>
+                        <?php if (!empty($c['payment_slip'])): ?>
+                        <a href="../assets/images/slips/<?= rawurlencode($c['payment_slip']) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="fa-regular fa-image me-1"></i>View</a>
+                        <?php else: ?><span class="text-muted">—</span><?php endif; ?>
+                    </td>
+                    <td class="text-muted"><?= !empty($c['created_at']) ? date('d M Y, h:i A', strtotime($c['created_at'])) : 'N/A' ?></td>
+                </tr>
+                <?php endwhile; ?>
+            <?php else: ?>
+                <tr><td colspan="8"><div class="empty-state"><i class="fa-regular fa-receipt d-block"></i>No commission submissions yet.</div></td></tr>
+            <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
 </div>
 
-
-</div>
-<!-- ===========================
-     COMMISSION PAYMENT HISTORY
-=========================== -->
-
-
-<div class="card-box">
-
-
-<h5 class="fw-bold mb-3">
-
-
-<i class="fa-solid fa-clock-rotate-left text-primary me-2"></i>
-
-
-Commission Payment History
-
-
-</h5>
-
-
-
-
-
-
-
-<div class="table-responsive">
-
-
-<table class="table table-hover align-middle">
-
-
-
-<thead class="table-light">
-
-
-<tr>
-
-
-<th>No</th>
-
-<th>Booking ID</th>
-
-<th>Booking Amount</th>
-
-<th>Commission</th>
-
-<th>Status</th>
-
-<th>Payment Slip</th>
-
-<th>Date</th>
-
-
-</tr>
-
-
-</thead>
-
-
-
-
-
-<tbody>
-
-
-
-<?php
-
-
-$commission_history_stmt = mysqli_prepare(
-
-$conn,
-
-"
-
-SELECT
-
-
-c.*,
-
-
-b.booking_code
-
-
-
-FROM commissions c
-
-
-
-LEFT JOIN bookings b
-
-
-ON c.booking_id=b.booking_id
-
-
-
-WHERE c.owner_id=?
-
-
-
-ORDER BY c.commission_id DESC
-
-
-
-"
-
-);
-
-
-
-mysqli_stmt_bind_param(
-
-$commission_history_stmt,
-
-"i",
-
-$owner_id
-
-);
-
-
-
-mysqli_stmt_execute(
-
-$commission_history_stmt
-
-);
-
-
-
-$commission_history = mysqli_stmt_get_result(
-
-$commission_history_stmt
-
-);
-
-
-
-?>
-
-
-
-
-
-
-
-<?php if($commission_history && mysqli_num_rows($commission_history)>0): ?>
-
-
-
-
-
-<?php 
-
-$no = 1;
-
-while($c=mysqli_fetch_assoc($commission_history)): 
-
-?>
-
-
-
-<tr>
-
-
-
-<td>
-
-<?=$no++?>
-
-</td>
-
-
-
-
-
-
-
-<td>
-
-
-<strong>
-
-<?=htmlspecialchars($c['booking_code'] ?? '-')?>
-
-</strong>
-
-
-</td>
-
-
-
-
-
-
-
-
-<td>
-
-
-<?=number_format($c['booking_amount'] ?? 0,2)?>
-
-MMK
-
-
-</td>
-
-
-
-
-
-
-
-<td class="text-danger fw-bold">
-
-
-<?=number_format($c['commission_amount'] ?? 0,2)?>
-
-MMK
-
-
-</td>
-
-
-
-
-
-
-
-<td>
-
-
-
-<?php
-
-
-$status = $c['commission_status'] ?? 'Pending';
-
-
-if($status=="Paid"){
-
-    $badge="success";
-
-}
-else{
-
-    $badge="warning";
-
-}
-
-
-
-?>
-
-
-
-<span class="badge bg-<?=$badge?>">
-
-
-<?=$status?>
-
-
-</span>
-
-
-</td>
-
-
-
-
-
-
-
-<td>
-
-
-
-<?php if(!empty($c['payment_slip'])): ?>
-
-
-<a href="../assets/images/slips/<?=htmlspecialchars($c['payment_slip'])?>"
-
-target="_blank"
-
-class="btn btn-sm btn-outline-primary">
-
-
-<i class="fa-solid fa-image"></i>
-
-
-View Slip
-
-
-</a>
-
-
-<?php else: ?>
-
-
-<span class="text-muted">
-
-
-No File
-
-
-</span>
-
-
-<?php endif; ?>
-
-
-</td>
-
-
-
-
-
-
-
-<td>
-
-
-<?=
-
-!empty($c['created_at'])
-
-?
-
-date(
-
-"d M Y",
-
-strtotime($c['created_at'])
-
-)
-
-:
-
-"N/A"
-
-?>
-
-
-</td>
-
-
-
-
-
-</tr>
-
-
-
-<?php endwhile; ?>
-
-
-
-
-
-
-
-<?php else: ?>
-
-
-
-<tr>
-
-
-<td colspan="7"
-
-class="text-center text-muted py-4">
-
-
-No commission payment history found.
-
-
-</td>
-
-
-</tr>
-
-
-
-<?php endif; ?>
-
-
-
-
-</tbody>
-
-
-
-</table>
-
-
-
-</div>
-
-
-
-</div>
-
-
-
-
-
-
-
-
-
-<!-- ===========================
-     SUMMARY FOOTER CARDS
-=========================== -->
-
-
-<div class="row g-4 mb-4">
-
-
-
-
-
-<div class="col-md-4">
-
-
-<div class="card-box text-center">
-
-
-<i class="fa-solid fa-chart-line fa-2x text-success mb-2"></i>
-
-
-<h6 class="text-muted">
-
-
-Gross Sales
-
-
-</h6>
-
-
-<h4 class="fw-bold">
-
-
-<?=number_format($grand_total,2)?>
-
-MMK
-
-
-</h4>
-
-
-</div>
-
-
-</div>
-
-
-
-
-
-
-
-
-<div class="col-md-4">
-
-
-<div class="card-box text-center">
-
-
-<i class="fa-solid fa-percent fa-2x text-danger mb-2"></i>
-
-
-<h6 class="text-muted">
-
-
-Platform Commission
-
-
-</h6>
-
-
-<h4 class="fw-bold">
-
-
-<?=number_format($total_commission,2)?>
-
-MMK
-
-
-</h4>
-
-
-</div>
-
-
-</div>
-
-
-
-
-
-
-
-
-<div class="col-md-4">
-
-
-<div class="card-box text-center">
-
-
-<i class="fa-solid fa-wallet fa-2x text-primary mb-2"></i>
-
-
-<h6 class="text-muted">
-
-
-Owner Net Earnings
-
-
-</h6>
-
-
-<h4 class="fw-bold">
-
-
-<?=number_format($net_owner_earnings,2)?>
-
-MMK
-
-
-</h4>
-
-
-</div>
-
-
-</div>
-
-
-
-
-</div>
-
-
-
-
-
-
-
-
-
-<!-- ===========================
-     FOOTER
-=========================== -->
-
-
-<footer class="text-center text-muted py-4">
-
-
-<small>
-
-
-© <?=date('Y')?> Hotel Booking System V3 |
-
-
-Owner Financial Management System
-
-
-</small>
-
-
-</footer>
-
-
-
-
-
-
-
+<footer class="text-center text-muted py-4"><small>© <?= date('Y') ?> StayFlow Partner · Earnings & Commission</small></footer>
 </main>
-
-
 </div>
-
-
-
-
-
-
-
-
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-
-
-
-<script>
-
-
-/*
-================================
-AUTO HIDE ALERT
-================================
-*/
-
-
-setTimeout(function(){
-
-
-document.querySelectorAll('.alert')
-
-.forEach(function(alert){
-
-
-alert.style.display='none';
-
-
-});
-
-
-},4000);
-
-
-
-</script>
-
-
-
-
-
-
+<script>setTimeout(()=>document.querySelectorAll('.alert').forEach(el=>{el.style.transition='opacity .25s';el.style.opacity='0';setTimeout(()=>el.remove(),250)}),4500);</script>
 </body>
-
 </html>

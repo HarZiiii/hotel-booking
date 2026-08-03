@@ -1,0 +1,26 @@
+STAYFLOW DEMO ACCOUNTS
+======================
+
+Website Admin
+Username: superadmin
+Email: admin@hbs-v3.com
+Password: Admin@123!
+Role: admin
+
+Hotel Owners
+Username: hotelowner1 / hotelowner2
+Email: owner1@gmail.com / owner2@gmail.com
+Password: Owner@123!
+Role: owner
+
+Guests / Customers
+Username: customer_guest / guest_yangon / guest_mandalay
+Email: customer@gmail.com / guest.yangon@example.com / guest.mandalay@example.com
+Password: Guest@123!
+Role: customer
+
+Public register.php always creates CUSTOMER accounts.
+Owner accounts should be created from Admin > Owners.
+Admin/Owner/Customer are redirected to separate areas after login.
+Passwords are stored with password_hash() and verified with password_verify().
+Legacy plain-text passwords are upgraded to hashes automatically after a successful login.

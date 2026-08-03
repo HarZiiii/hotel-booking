@@ -3,57 +3,44 @@
 require_once '../config/config.php';
 
 
+/*
+===========================================
+1. SESSION & ADMIN AUTHENTICATION
+===========================================
+*/
+
 if(session_status() === PHP_SESSION_NONE){
-
     session_start();
-
 }
 
 
-
-/*
-====================================
-ADMIN AUTH
-====================================
-*/
-
 if(
-
-    !isset($_SESSION['user_id'])
-
-    ||
-
-    !isset($_SESSION['role'])
-
-    ||
-
+    !isset($_SESSION['user_id']) ||
+    !isset($_SESSION['role']) ||
     $_SESSION['role'] !== 'admin'
-
 ){
 
     header("Location: ../login.php");
-
     exit();
 
 }
 
 
+$admin_id = $_SESSION['user_id'];
+
 
 
 
 /*
-====================================
-CSRF
-====================================
+===========================================
+2. CSRF TOKEN
+===========================================
 */
 
 
 if(empty($_SESSION['csrf_token'])){
 
-    $_SESSION['csrf_token']
-
-    =
-
+    $_SESSION['csrf_token'] =
     bin2hex(random_bytes(32));
 
 }
@@ -62,40 +49,27 @@ if(empty($_SESSION['csrf_token'])){
 
 
 
-
 /*
-====================================
-PAY COMMISSION
-====================================
+===========================================
+3. APPROVE COMMISSION ACTION
+===========================================
 */
 
 
 if(
-
-$_SERVER['REQUEST_METHOD']=="POST"
-
-&&
-
-isset($_POST['pay_commission'])
-
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    &&
+    isset($_POST['approve_commission'])
 ){
 
 
-
     if(
-
         !isset($_POST['csrf_token'])
-
         ||
-
         !hash_equals(
-
             $_SESSION['csrf_token'],
-
             $_POST['csrf_token']
-
         )
-
     ){
 
         die("Invalid CSRF Token");
@@ -104,52 +78,46 @@ isset($_POST['pay_commission'])
 
 
 
-
-
-    $commission_id=intval(
-
-        $_POST['commission_id'] ?? 0
-
-    );
+    $commission_id =
+    intval($_POST['commission_id'] ?? 0);
 
 
 
 
-
-    if($commission_id>0){
-
+    if($commission_id > 0){
 
 
-        $stmt=mysqli_prepare(
+
+        /*
+        ===========================
+        GET COMMISSION DATA
+        ===========================
+        */
+
+
+        $commission_stmt = mysqli_prepare(
 
             $conn,
 
             "
-
             SELECT
 
-            owner_id,
+            c.owner_id,
 
-            commission_amount,
+            c.commission_amount
 
-            commission_status
+            FROM commissions c
 
-
-            FROM commissions
-
-
-            WHERE commission_id=?
-
+            WHERE c.commission_id = ?
 
             "
 
         );
 
 
-
         mysqli_stmt_bind_param(
 
-            $stmt,
+            $commission_stmt,
 
             "i",
 
@@ -158,44 +126,47 @@ isset($_POST['pay_commission'])
         );
 
 
-
-        mysqli_stmt_execute($stmt);
-
-
-
-        $result=mysqli_stmt_get_result($stmt);
+        mysqli_stmt_execute(
+            $commission_stmt
+        );
 
 
-
-        $commission=mysqli_fetch_assoc($result);
-
-
-
-
+        $commission_result =
+        mysqli_stmt_get_result(
+            $commission_stmt
+        );
 
 
-        if(
-
-            $commission
-
-            &&
-
-            $commission['commission_status']=="Pending"
-
-        ){
+        $commission =
+        mysqli_fetch_assoc(
+            $commission_result
+        );
 
 
 
-            $update=mysqli_prepare(
+
+
+
+
+        if($commission){
+
+
+
+            /*
+            ===========================
+            UPDATE COMMISSION STATUS
+            ===========================
+            */
+
+
+            $update_stmt = mysqli_prepare(
 
                 $conn,
 
                 "
-
                 UPDATE commissions
 
                 SET commission_status='Paid'
-
 
                 WHERE commission_id=?
 
@@ -204,10 +175,9 @@ isset($_POST['pay_commission'])
             );
 
 
-
             mysqli_stmt_bind_param(
 
-                $update,
+                $update_stmt,
 
                 "i",
 
@@ -216,68 +186,57 @@ isset($_POST['pay_commission'])
             );
 
 
+            mysqli_stmt_execute(
+                $update_stmt
+            );
 
-            mysqli_stmt_execute($update);
+
+
 
 
 
 
 
             /*
-            ============================
+            ===========================
             OWNER NOTIFICATION
-            ============================
+            ===========================
             */
 
 
-            $title="Commission Paid";
+            $title =
+            "Commission Payment Confirmed";
 
 
-            $message=
+
+            $message =
 
             "Your commission payment of "
-
             .
-
             number_format(
-
                 $commission['commission_amount'],
-
                 2
-
             )
-
             .
-
-            " MMK has been paid.";
-
+            " MMK has been marked as paid by admin.";
 
 
 
-
-            $notify=mysqli_prepare(
+            $notify_stmt = mysqli_prepare(
 
                 $conn,
 
                 "
-
                 INSERT INTO notifications
 
                 (
-
-                user_id,
-
-                title,
-
-                message,
-
-                notification_type
-
+                    user_id,
+                    title,
+                    message,
+                    notification_type
                 )
 
-
                 VALUES
-
                 (?,?,?,'System')
 
                 "
@@ -285,10 +244,9 @@ isset($_POST['pay_commission'])
             );
 
 
-
             mysqli_stmt_bind_param(
 
-                $notify,
+                $notify_stmt,
 
                 "iss",
 
@@ -301,8 +259,96 @@ isset($_POST['pay_commission'])
             );
 
 
+            mysqli_stmt_execute(
+                $notify_stmt
+            );
 
-            mysqli_stmt_execute($notify);
+
+
+
+
+
+
+            /*
+            ===========================
+            AUDIT LOG
+            ===========================
+            */
+
+
+            $action =
+            "COMMISSION_PAID";
+
+
+            $table =
+            "commissions";
+
+
+            $ip =
+            $_SERVER['REMOTE_ADDR']
+            ??
+            '127.0.0.1';
+
+
+
+            $agent =
+            $_SERVER['HTTP_USER_AGENT']
+            ??
+            'Unknown';
+
+
+
+
+            $audit_stmt = mysqli_prepare(
+
+                $conn,
+
+                "
+                INSERT INTO audit_logs
+
+                (
+                    user_id,
+                    action,
+                    table_name,
+                    record_id,
+                    ip_address,
+                    user_agent
+                )
+
+                VALUES
+                (?,?,?,?,?,?)
+
+                "
+
+            );
+
+
+
+            mysqli_stmt_bind_param(
+
+                $audit_stmt,
+
+                "ississ",
+
+                $admin_id,
+
+                $action,
+
+                $table,
+
+                $commission_id,
+
+                $ip,
+
+                $agent
+
+            );
+
+
+
+            mysqli_stmt_execute(
+                $audit_stmt
+            );
 
 
 
@@ -310,32 +356,65 @@ isset($_POST['pay_commission'])
 
 
 
+        header(
+            "Location: manage_commissions.php?msg=paid"
+        );
+
+        exit();
+
+
     }
 
 
-
-    header(
-
-        "Location: manage_commissions.php?msg=paid"
-
-    );
-
-    exit();
-
 }
 
-?>
-<?php
+
+
+
+
 
 
 /*
-====================================
-COMMISSION SUMMARY
-====================================
+===========================================
+4. PAGINATION
+===========================================
 */
 
 
-$stats_query=mysqli_query(
+$limit = 20;
+
+
+$page =
+intval(
+    $_GET['page'] ?? 1
+);
+
+
+if($page < 1){
+
+    $page = 1;
+
+}
+
+
+$offset =
+($page-1)*$limit;
+
+
+
+
+
+
+
+
+/*
+===========================================
+5. COMMISSION SUMMARY
+===========================================
+*/
+
+
+$stats_query = mysqli_query(
 
 $conn,
 
@@ -344,27 +423,12 @@ $conn,
 SELECT
 
 
-IFNULL(
-
-SUM(booking_amount),
-
-0
-
-) AS total_sales,
+IFNULL(SUM(booking_amount),0)
+AS total_sales,
 
 
-
-
-IFNULL(
-
-SUM(commission_amount),
-
-0
-
-) AS total_commission,
-
-
-
+IFNULL(SUM(commission_amount),0)
+AS total_commission,
 
 
 IFNULL(
@@ -381,13 +445,11 @@ ELSE 0
 
 END
 
-),
+)
 
-0
+,0)
 
-) AS paid_commission,
-
-
+AS approved_commission,
 
 
 
@@ -397,7 +459,9 @@ SUM(
 
 CASE
 
-WHEN commission_status='Pending'
+WHEN commission_status!='Paid'
+
+OR commission_status IS NULL
 
 THEN commission_amount
 
@@ -405,30 +469,15 @@ ELSE 0
 
 END
 
-),
+)
 
-0
+,0)
 
-) AS pending_commission
-
-
+AS pending_commission
 
 
 
 FROM commissions
-
-
-
-WHERE commission_status IN
-
-(
-
-'Pending',
-
-'Paid'
-
-)
-
 
 
 "
@@ -437,38 +486,26 @@ WHERE commission_status IN
 
 
 
-
-
-$stats=mysqli_fetch_assoc(
-
-$stats_query
-
+$stats =
+mysqli_fetch_assoc(
+    $stats_query
 );
 
 
 
-
-
 $total_sales =
-
 $stats['total_sales'] ?? 0;
 
 
-
 $total_commission =
-
 $stats['total_commission'] ?? 0;
 
 
-
-$paid_commission =
-
-$stats['paid_commission'] ?? 0;
-
+$approved_commission =
+$stats['approved_commission'] ?? 0;
 
 
 $pending_commission =
-
 $stats['pending_commission'] ?? 0;
 
 
@@ -478,63 +515,22 @@ $stats['pending_commission'] ?? 0;
 
 
 
-
 /*
-====================================
-PAGINATION
-====================================
+===========================================
+6. TOTAL COMMISSION COUNT
+===========================================
 */
 
 
-$limit=20;
-
-
-
-$page=intval(
-
-$_GET['page'] ?? 1
-
-);
-
-
-
-if($page < 1){
-
-    $page=1;
-
-}
-
-
-
-$offset=
-
-($page-1)*$limit;
-
-
-
-
-
-
-
-$count_query=mysqli_query(
+$count_query = mysqli_query(
 
 $conn,
 
 "
 
-SELECT COUNT(*) AS total
+SELECT COUNT(*) total
 
 FROM commissions
-
-WHERE commission_status IN
-
-(
-
-'Pending',
-
-'Paid'
-
-)
 
 "
 
@@ -542,26 +538,17 @@ WHERE commission_status IN
 
 
 
-$total_records=
-
+$total_records =
 mysqli_fetch_assoc(
-
-$count_query
-
+    $count_query
 )['total'] ?? 0;
 
 
 
-
-
-$total_pages=
-
+$total_pages =
 ceil(
-
-$total_records/$limit
-
+    $total_records/$limit
 );
-
 
 
 
@@ -571,13 +558,13 @@ $total_records/$limit
 
 
 /*
-====================================
-FETCH COMMISSIONS
-====================================
+===========================================
+7. FETCH COMMISSION DATA
+===========================================
 */
 
 
-$commission_stmt=mysqli_prepare(
+$commissions_stmt = mysqli_prepare(
 
 $conn,
 
@@ -607,25 +594,11 @@ ON c.owner_id=u.user_id
 
 
 
-
-WHERE c.commission_status IN
-
-(
-
-'Pending',
-
-'Paid'
-
-)
-
-
-
 ORDER BY c.commission_id DESC
 
 
 
 LIMIT ? OFFSET ?
-
 
 
 "
@@ -634,11 +607,9 @@ LIMIT ? OFFSET ?
 
 
 
-
-
 mysqli_stmt_bind_param(
 
-$commission_stmt,
+$commissions_stmt,
 
 "ii",
 
@@ -650,85 +621,50 @@ $offset
 
 
 
-
-
 mysqli_stmt_execute(
-
-$commission_stmt
-
+    $commissions_stmt
 );
 
 
 
-
-
-$commissions_query=
+$commissions_query =
 
 mysqli_stmt_get_result(
-
-$commission_stmt
-
+    $commissions_stmt
 );
 
 
 
 ?>
-
 <!DOCTYPE html>
-
 <html lang="en">
-
 
 <head>
 
-
 <meta charset="UTF-8">
 
+<title>Manage Commissions | HBS V3 Admin</title>
 
-<title>
-Manage Commissions | HBS V3 Admin
-</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
 
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 
 
-
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-rel="stylesheet">
-
-
-
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-rel="stylesheet">
-
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
 
 <style>
-
-
-*{
-
-box-sizing:border-box;
-
-}
-
 
 
 body{
 
 font-family:'Poppins',sans-serif;
 
-background:#f1f5f9;
-
-margin:0;
+background:#f4f6f9;
 
 }
 
@@ -744,13 +680,14 @@ min-height:100vh;
 
 
 
+
 /* SIDEBAR */
 
 .sidebar{
 
 width:260px;
 
-background:#1e293b;
+background:#0f172a;
 
 color:white;
 
@@ -760,7 +697,7 @@ top:0;
 
 bottom:0;
 
-left:0;
+overflow-y:auto;
 
 }
 
@@ -768,33 +705,21 @@ left:0;
 
 .brand{
 
-padding:22px;
+padding:20px;
 
-font-size:20px;
+font-size:19px;
 
 font-weight:700;
 
 color:#38bdf8;
 
-border-bottom:1px solid #334155;
+border-bottom:1px solid #1e293b;
 
 }
 
 
 
-.sidebar ul{
-
-padding:0;
-
-margin:0;
-
-list-style:none;
-
-}
-
-
-
-.sidebar li a{
+.sidebar a{
 
 display:flex;
 
@@ -802,21 +727,22 @@ align-items:center;
 
 gap:12px;
 
-padding:14px 20px;
+padding:12px 20px;
 
 color:#94a3b8;
 
 text-decoration:none;
 
+font-size:14px;
+
 }
 
 
 
-.sidebar li a:hover,
+.sidebar a:hover,
+.sidebar .active a{
 
-.sidebar li.active a{
-
-background:#0f172a;
+background:#1e293b;
 
 color:#38bdf8;
 
@@ -828,25 +754,30 @@ border-left:4px solid #38bdf8;
 
 
 
+
 /* MAIN */
 
 .main-content{
 
 margin-left:260px;
 
-padding:35px;
-
 width:calc(100% - 260px);
+
+padding:25px;
 
 }
 
 
 
+.topbar{
 
+background:white;
 
-.title{
+padding:18px 25px;
 
-font-weight:700;
+border-radius:12px;
+
+box-shadow:0 3px 10px rgba(0,0,0,.05);
 
 margin-bottom:25px;
 
@@ -854,45 +785,94 @@ margin-bottom:25px;
 
 
 
-
-
 .card-box{
 
 background:white;
 
-border-radius:18px;
+padding:22px;
 
-padding:25px;
+border-radius:12px;
 
-box-shadow:0 5px 20px rgba(0,0,0,.05);
+box-shadow:0 3px 10px rgba(0,0,0,.04);
+
+margin-bottom:25px;
 
 }
-
-
 
 
 
 .stat-card{
 
-border-radius:18px;
+border-radius:12px;
 
-padding:25px;
+padding:22px;
 
 color:white;
+
+height:100%;
 
 }
 
 
 
-.slip-img{
+.slip-thumb{
 
-width:60px;
+width:55px;
 
-height:60px;
+height:55px;
 
 object-fit:cover;
 
 border-radius:8px;
+
+border:1px solid #ddd;
+
+cursor:pointer;
+
+}
+
+
+
+.table td{
+
+vertical-align:middle;
+
+}
+
+
+
+
+@media(max-width:768px){
+
+
+.sidebar{
+
+position:relative;
+
+width:100%;
+
+height:auto;
+
+}
+
+
+
+.wrapper{
+
+display:block;
+
+}
+
+
+
+.main-content{
+
+margin-left:0;
+
+width:100%;
+
+}
+
 
 }
 
@@ -901,10 +881,9 @@ border-radius:8px;
 </style>
 
 
+
+<link rel="stylesheet" href="../assets/css/admin-sidebar.css?v=2">
 </head>
-
-
-
 
 
 
@@ -912,254 +891,36 @@ border-radius:8px;
 
 
 
-
-
-
 <div class="wrapper">
 
 
 
+<!-- SIDEBAR -->
 
 
-<!-- ==========================
-SIDEBAR
-========================== -->
-
-
-<aside class="sidebar">
-
-
-
-<div class="brand">
-
-<i class="fa-solid fa-hotel"></i>
-
-HBS V3 Admin
-
-</div>
-
-
-
-
-<ul>
-
-
-
-<li>
-
-<a href="dashboard.php">
-
-<i class="fa-solid fa-chart-line"></i>
-
-Dashboard
-
-</a>
-
-</li>
-
-
-
-
-
-<li class="active">
-
-<a href="manage_commissions.php">
-
-<i class="fa-solid fa-hand-holding-dollar"></i>
-
-Commission
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="users.php">
-
-<i class="fa-solid fa-users"></i>
-
-Users
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="owners.php">
-
-<i class="fa-solid fa-user-tie"></i>
-
-Hotel Owners
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="hotels.php">
-
-<i class="fa-solid fa-hotel"></i>
-
-Hotels
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="rooms.php">
-
-<i class="fa-solid fa-bed"></i>
-
-Rooms
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="bookings.php">
-
-<i class="fa-solid fa-calendar-check"></i>
-
-Bookings
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="payments.php">
-
-<i class="fa-solid fa-credit-card"></i>
-
-Payments
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="reviews.php">
-
-<i class="fa-solid fa-star"></i>
-
-Reviews
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="notifications.php">
-
-<i class="fa-solid fa-bell"></i>
-
-Notifications
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="audit_logs.php">
-
-<i class="fa-solid fa-clock-rotate-left"></i>
-
-Audit Logs
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="../logout.php">
-
-<i class="fa-solid fa-right-from-bracket"></i>
-
-Logout
-
-</a>
-
-</li>
-
-
-
-</ul>
-
-
-
-</aside>
-
-
-
-
-
-
+<?php include __DIR__ . '/../includes/admin_sidebar.php'; ?>
 
 <main class="main-content">
 
 
 
+<!-- HEADER -->
 
 
-<h2 class="title">
+<div class="topbar">
 
-<i class="fa-solid fa-hand-holding-dollar text-success"></i>
 
-Manage Commissions
+<h4 class="fw-bold mb-0">
 
-</h2>
+<i class="fa-solid fa-hand-holding-dollar text-primary"></i>
+
+Owner Commission Requests
+
+</h4>
+
+
+
+</div>
 
 
 
@@ -1173,7 +934,9 @@ Manage Commissions
 
 <div class="alert alert-success">
 
-Commission marked as Paid successfully.
+<i class="fa-solid fa-circle-check"></i>
+
+Commission marked as paid successfully.
 
 </div>
 
@@ -1188,9 +951,10 @@ Commission marked as Paid successfully.
 
 
 
-<!-- SUMMARY -->
+<!-- SUMMARY CARDS -->
 
-<div class="row g-4 mb-4">
+
+<div class="row g-3 mb-4">
 
 
 
@@ -1199,10 +963,14 @@ Commission marked as Paid successfully.
 <div class="stat-card bg-primary">
 
 
-<h6>Total Sales</h6>
+<small>
+
+Total Booking Volume
+
+</small>
 
 
-<h4>
+<h4 class="fw-bold mt-2">
 
 <?=number_format($total_sales,2)?>
 
@@ -1225,10 +993,14 @@ MMK
 <div class="stat-card bg-success">
 
 
-<h6>Total Commission</h6>
+<small>
+
+Total Commission
+
+</small>
 
 
-<h4>
+<h4 class="fw-bold mt-2">
 
 <?=number_format($total_commission,2)?>
 
@@ -1246,17 +1018,22 @@ MMK
 
 
 
+
 <div class="col-md-3">
 
 <div class="stat-card bg-info">
 
 
-<h6>Paid</h6>
+<small>
+
+Paid Commission
+
+</small>
 
 
-<h4>
+<h4 class="fw-bold mt-2">
 
-<?=number_format($paid_commission,2)?>
+<?=number_format($approved_commission,2)?>
 
 MMK
 
@@ -1272,15 +1049,20 @@ MMK
 
 
 
+
 <div class="col-md-3">
 
 <div class="stat-card bg-warning text-dark">
 
 
-<h6>Pending</h6>
+<small>
+
+Pending Commission
+
+</small>
 
 
-<h4>
+<h4 class="fw-bold mt-2">
 
 <?=number_format($pending_commission,2)?>
 
@@ -1295,6 +1077,7 @@ MMK
 
 
 
+
 </div>
 
 
@@ -1305,22 +1088,38 @@ MMK
 
 
 
+<!-- COMMISSION TABLE -->
+
+
 <div class="card-box">
+
+
+
+<h5 class="fw-bold mb-3">
+
+
+<i class="fa-solid fa-list text-primary"></i>
+
+Commission Payment Submissions
+
+
+</h5>
+
+
 
 
 
 <div class="table-responsive">
 
 
-
 <table class="table table-hover align-middle">
-
 
 
 <thead class="table-light">
 
 
 <tr>
+
 
 <th>ID</th>
 
@@ -1349,20 +1148,17 @@ MMK
 
 
 
-
 <tbody>
 
 
 
-
-
-<?php if(mysqli_num_rows($commissions_query)>0): ?>
-
-
+<?php if($commissions_query && mysqli_num_rows($commissions_query)>0): ?>
 
 
 
 <?php while($row=mysqli_fetch_assoc($commissions_query)): ?>
+
+
 
 <tr>
 
@@ -1379,7 +1175,13 @@ MMK
 
 <td>
 
+
+<strong>
+
 <?=htmlspecialchars($row['username'] ?? 'Unknown')?>
+
+</strong>
+
 
 </td>
 
@@ -1408,6 +1210,7 @@ MMK
 
 <td>
 
+
 <strong class="text-success">
 
 <?=number_format($row['commission_amount'] ?? 0,2)?>
@@ -1416,7 +1219,9 @@ MMK
 
 </strong>
 
+
 </td>
+
 
 
 
@@ -1424,8 +1229,17 @@ MMK
 <td>
 
 
+<?php if(
 
-<?php if(!empty($row['payment_slip'])): ?>
+!empty($row['payment_slip'])
+
+&&
+
+file_exists(
+'../assets/images/slips/'.$row['payment_slip']
+)
+
+): ?>
 
 
 <a href="../assets/images/slips/<?=htmlspecialchars($row['payment_slip'])?>"
@@ -1433,7 +1247,8 @@ target="_blank">
 
 
 <img src="../assets/images/slips/<?=htmlspecialchars($row['payment_slip'])?>"
-class="slip-img">
+
+class="slip-thumb">
 
 
 </a>
@@ -1445,7 +1260,7 @@ class="slip-img">
 
 <span class="text-muted">
 
-No Slip
+No Image
 
 </span>
 
@@ -1459,17 +1274,26 @@ No Slip
 
 
 
+
+
+
 <td>
 
 
-<?php if($row['commission_status']=="Paid"): ?>
+
+<?php if(
+
+($row['commission_status'] ?? '')==="Paid"
+
+): ?>
 
 
 <span class="badge bg-success">
 
-Paid
+Approved
 
 </span>
+
 
 
 <?php else: ?>
@@ -1482,10 +1306,14 @@ Pending
 </span>
 
 
+
 <?php endif; ?>
 
 
+
 </td>
+
+
 
 
 
@@ -1493,9 +1321,33 @@ Pending
 
 <td>
 
-<?=date("d M Y",strtotime($row['created_at']))?>
+
+<small>
+
+<?=
+
+!empty($row['created_at'])
+
+?
+
+date(
+"d M Y",
+strtotime($row['created_at'])
+)
+
+:
+
+"N/A"
+
+?>
+
+</small>
+
 
 </td>
+
+
+
 
 
 
@@ -1507,39 +1359,44 @@ Pending
 
 <?php if(
 
-$row['commission_status']=="Pending"
-
-&&
-
-!empty($row['payment_slip'])
+($row['commission_status'] ?? '')!=="Paid"
 
 ): ?>
 
 
 
-<form method="POST">
+<form method="POST"
+
+onsubmit="return confirm('Approve this commission payment?');">
+
 
 
 <input type="hidden"
+
 name="csrf_token"
+
 value="<?=$_SESSION['csrf_token']?>">
 
 
 
 <input type="hidden"
+
 name="commission_id"
+
 value="<?=$row['commission_id']?>">
 
 
 
-<button class="btn btn-success btn-sm"
-name="pay_commission"
-onclick="return confirm('Confirm payment?');">
+<button type="submit"
+
+name="approve_commission"
+
+class="btn btn-sm btn-primary">
 
 
 <i class="fa-solid fa-check"></i>
 
-Pay
+Approve
 
 
 </button>
@@ -1549,10 +1406,10 @@ Pay
 
 
 
-<?php elseif($row['commission_status']=="Paid"): ?>
+<?php else: ?>
 
 
-<span class="text-success">
+<span class="text-success small">
 
 <i class="fa-solid fa-circle-check"></i>
 
@@ -1562,16 +1419,6 @@ Completed
 
 
 
-<?php else: ?>
-
-
-<span class="text-muted">
-
-Waiting Slip
-
-</span>
-
-
 <?php endif; ?>
 
 
@@ -1579,7 +1426,11 @@ Waiting Slip
 </td>
 
 
+
+
+
 </tr>
+
 
 
 <?php endwhile; ?>
@@ -1592,7 +1443,8 @@ Waiting Slip
 <tr>
 
 <td colspan="9"
-class="text-center py-5 text-muted">
+
+class="text-center text-muted py-4">
 
 No commission records found.
 
@@ -1601,8 +1453,8 @@ No commission records found.
 </tr>
 
 
-<?php endif; ?>
 
+<?php endif; ?>
 
 
 
@@ -1616,6 +1468,63 @@ No commission records found.
 
 
 </div>
+        <!-- ===========================
+             PAGINATION
+        ============================ -->
+
+        <?php if($total_pages > 1): ?>
+
+        <nav class="mt-4">
+
+            <ul class="pagination justify-content-center">
+
+
+                <!-- Previous -->
+
+                <li class="page-item <?=($page <= 1)?'disabled':''?>">
+
+
+                    <a class="page-link"
+
+                    href="?page=<?=($page-1)?>">
+
+
+                    Previous
+
+
+                    </a>
+
+
+                </li>
+
+
+
+
+
+                <!-- Page Numbers -->
+
+
+                <?php for($i=1;$i<=$total_pages;$i++): ?>
+
+
+                <li class="page-item <?=($page==$i)?'active':''?>">
+
+
+                    <a class="page-link"
+
+                    href="?page=<?=$i?>">
+
+
+                    <?=$i?>
+
+
+                    </a>
+
+
+                </li>
+
+
+                <?php endfor; ?>
 
 
 
@@ -1623,59 +1532,68 @@ No commission records found.
 
 
 
+                <!-- Next -->
 
 
-<!-- PAGINATION -->
+                <li class="page-item <?=($page >= $total_pages)?'disabled':''?>">
 
 
-<?php if($total_pages>1): ?>
+                    <a class="page-link"
+
+                    href="?page=<?=($page+1)?>">
 
 
-<nav class="mt-4">
+                    Next
 
 
-<ul class="pagination justify-content-center">
+                    </a>
 
 
-<?php for($i=1;$i<=$total_pages;$i++): ?>
+                </li>
 
 
-<li class="page-item <?=$page==$i?'active':''?>">
+
+            </ul>
 
 
-<a class="page-link"
-href="?page=<?=$i?>">
-
-<?=$i?>
-
-</a>
+        </nav>
 
 
-</li>
-
-
-<?php endfor; ?>
-
-
-</ul>
-
-
-</nav>
-
-
-<?php endif; ?>
+        <?php endif; ?>
 
 
 
 
 
 
-</main>
+
+        <!-- FOOTER -->
 
 
+        <footer class="text-center text-muted py-4">
+
+
+            <small>
+
+            © <?=date('Y')?> Hotel Booking System V3 |
+
+            Secure Commission Management System
+
+
+            </small>
+
+
+        </footer>
+
+
+
+
+    </main>
 
 
 </div>
+
+
 
 
 

@@ -92,8 +92,7 @@ if(
 
         'approved',
         'rejected',
-        'pending',
-        'inactive'
+        'pending'
 
     ];
 
@@ -118,9 +117,10 @@ if(
         $update_sql = "
 
         UPDATE hotels
-        SET status=?
-        WHERE hotel_id=?
-        AND status != 'deleted'
+
+        SET status = ?
+
+        WHERE hotel_id = ?
 
         ";
 
@@ -688,13 +688,7 @@ u.full_name AS owner_name,
 u.email AS owner_email,
 
 
-COUNT(
-CASE 
-WHEN r.room_status='available'
-THEN r.room_id
-END
-)
-AS total_rooms
+COUNT(r.room_id) AS total_rooms
 
 
 
@@ -799,13 +793,13 @@ $notification_count = mysqli_query(
 $conn,
 
 "
+
 SELECT COUNT(*) AS total
 
 FROM notifications
 
-WHERE user_id=$admin_id
+WHERE is_read=0
 
-AND is_read=0
 "
 
 );
@@ -1050,6 +1044,8 @@ gap:15px;
 </style>
 
 
+
+<link rel="stylesheet" href="../assets/css/admin-sidebar.css?v=2">
 </head>
 
 
@@ -1064,186 +1060,7 @@ gap:15px;
 
 <!-- SIDEBAR -->
 
-<aside class="sidebar">
-
-
-<div class="brand">
-
-<i class="fa-solid fa-hotel"></i>
-
-HBS V3 Admin
-
-</div>
-
-
-
-<ul class="list-unstyled">
-
-
-<li>
-
-<a href="dashboard.php">
-
-<i class="fa-solid fa-chart-line"></i>
-
-Dashboard
-
-</a>
-
-</li>
-
-
-
-<li>
-
-<a href="users.php">
-
-<i class="fa-solid fa-users"></i>
-
-Users
-
-</a>
-
-</li>
-
-
-
-<li>
-
-<a href="owners.php">
-
-<i class="fa-solid fa-user-tie"></i>
-
-Hotel Owners
-
-</a>
-
-</li>
-
-
-
-<li class="active">
-
-<a href="hotels.php">
-
-<i class="fa-solid fa-hotel"></i>
-
-Hotels
-
-</a>
-
-</li>
-
-
-
-<li>
-
-<a href="rooms.php">
-
-<i class="fa-solid fa-bed"></i>
-
-Rooms
-
-</a>
-
-</li>
-
-
-
-<li>
-
-<a href="bookings.php">
-
-<i class="fa-solid fa-calendar-check"></i>
-
-Bookings
-
-</a>
-
-</li>
-
-
-
-<li>
-
-<a href="payments.php">
-
-<i class="fa-solid fa-credit-card"></i>
-
-Payments
-
-</a>
-
-</li>
-
-
-
-<li>
-
-<a href="reviews.php">
-
-<i class="fa-solid fa-star"></i>
-
-Reviews
-
-</a>
-
-</li>
-
-
-
-<li>
-
-<a href="notifications.php">
-
-<i class="fa-solid fa-bell"></i>
-
-Notifications
-
-</a>
-
-</li>
-
-
-
-<li>
-
-<a href="audit_logs.php">
-
-<i class="fa-solid fa-clock-rotate-left"></i>
-
-Audit Logs
-
-</a>
-
-</li>
-
-
-
-<li>
-
-<a href="../logout.php">
-
-<i class="fa-solid fa-right-from-bracket"></i>
-
-Logout
-
-</a>
-
-</li>
-
-
-</ul>
-
-
-</aside>
-
-
-
-
-
-
-
+<?php include __DIR__ . '/../includes/admin_sidebar.php'; ?>
 
 <main class="main-content">
 
@@ -1408,13 +1225,6 @@ Rejected
 
 </option>
 
-
-<option value="inactive"
-<?=$status_filter=="inactive"?'selected':''?>>
-
-Inactive
-
-</option>
 
 
 </select>
@@ -1633,22 +1443,19 @@ $status=$hotel['status'];
 
 if($status=="approved"){
 
-    $badge="success";
+$badge="success";
 
 }
+
 elseif($status=="rejected"){
 
-    $badge="danger";
+$badge="danger";
 
 }
-elseif($status=="inactive"){
 
-    $badge="secondary";
-
-}
 else{
 
-    $badge="warning";
+$badge="warning";
 
 }
 
@@ -1733,13 +1540,6 @@ Rejected
 
 </option>
 
-
-<option value="inactive"
-<?=$status=="inactive"?'selected':''?>>
-
-Inactive
-
-</option>
 
 
 </select>

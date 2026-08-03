@@ -1,149 +1,18 @@
 <?php
-require_once 'includes/header.php';
-require_once 'includes/navbar.php';
-
-$error = "";
-$success = "";
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $username = mysqli_real_escape_string($conn, trim($_POST['username']));
-    $first_name = mysqli_real_escape_string($conn, trim($_POST['first_name']));
-    $last_name = mysqli_real_escape_string($conn, trim($_POST['last_name']));
-    $full_name = $first_name . " " . $last_name;
-    $email = mysqli_real_escape_string($conn, trim($_POST['email']));
-    $phone = mysqli_real_escape_string($conn, trim($_POST['phone']));
-    $password = $_POST['password'];
-    $confirm_password = $_POST['confirm_password'];
-    $gender = mysqli_real_escape_string($conn, $_POST['gender']);
-    $date_of_birth = mysqli_real_escape_string($conn, $_POST['date_of_birth']);
-    $address = mysqli_real_escape_string($conn, trim($_POST['address']));
-    $city = mysqli_real_escape_string($conn, trim($_POST['city']));
-    $country = mysqli_real_escape_string($conn, trim($_POST['country']));
-    $postal_code = mysqli_real_escape_string($conn, trim($_POST['postal_code']));
-    $role = mysqli_real_escape_string($conn, $_POST['role']);
-
-    // Validation Check
-    if ($password !== $confirm_password) {
-        $error = "Passwords do not match!";
-    } else {
-        // Username သို့မဟုတ် Email သို့မဟုတ် Phone ရှိပြီးသားလား စစ်ဆေးခြင်း
-        $check_query = "SELECT * FROM users WHERE username='$username' OR email='$email' OR phone='$phone' LIMIT 1";
-        $result = mysqli_query($conn, $check_query);
-        $user = mysqli_fetch_assoc($result);
-
-        if ($user) {
-            if ($user['username'] === $username) { $error = "Username already exists!"; }
-            elseif ($user['email'] === $email) { $error = "Email already exists!"; }
-            elseif ($user['phone'] === $phone) { $error = "Phone number already exists!"; }
-        } else {
-            // Password ကို လုံခြုံအောင် Hashing လုပ်ခြင်း
-            $hashed_password = password_hash($password, PASSWORD_BCRYPT);
-
-            // Database ထဲသို့ Profile အချက်အလက်အစုံထည့်ခြင်း
-            $query = "INSERT INTO users (username, full_name, first_name, last_name, email, phone, password, role, gender, date_of_birth, address, city, country, postal_code, status) 
-                      VALUES ('$username', '$full_name', '$first_name', '$last_name', '$email', '$phone', '$hashed_password', '$role', '$gender', '$date_of_birth', '$address', '$city', '$country', '$postal_code', 'active')";
-            
-            if (mysqli_query($conn, $query)) {
-                $new_user_id = mysqli_insert_id($conn);
-                
-                // အကယ်၍ Register လုပ်သူသည် Owner ဖြစ်ပါက သူ့အတွက် Wallet တစ်ခုပါ တခါတည်း ဆောက်ပေးခြင်း
-                if ($role === 'owner') {
-                    mysqli_query($conn, "INSERT INTO wallets (owner_id, balance) VALUES ('$new_user_id', 0.00)");
-                }
-                
-                $success = "Registration successful! You can now <a href='login.php'>Login</a>.";
-            } else {
-                $error = "Registration failed: " . mysqli_error($conn);
-            }
-        }
-    }
+require_once 'includes/header.php';require_once 'includes/navbar.php';
+$error='';$success='';
+if($_SERVER['REQUEST_METHOD']==='POST'){
+ $username=trim($_POST['username']??'');$first=trim($_POST['first_name']??'');$last=trim($_POST['last_name']??'');$email=trim($_POST['email']??'');$phone=trim($_POST['phone']??'');$password=$_POST['password']??'';$confirm=$_POST['confirm_password']??'';$gender=$_POST['gender']??'Other';$dob=$_POST['date_of_birth']??null;$address=trim($_POST['address']??'');$city=trim($_POST['city']??'');$country=trim($_POST['country']??'');$postal=trim($_POST['postal_code']??'');$role='customer';
+ if(strlen($username)<3){$error='Username must be at least 3 characters.';}elseif(!filter_var($email,FILTER_VALIDATE_EMAIL)){$error='Please enter a valid email address.';}elseif(strlen($password)<8){$error='Password must contain at least 8 characters.';}elseif($password!==$confirm){$error='Passwords do not match.';}else{
+  $check=mysqli_prepare($conn,'SELECT user_id,username,email,phone FROM users WHERE username=? OR email=? OR phone=? LIMIT 1');mysqli_stmt_bind_param($check,'sss',$username,$email,$phone);mysqli_stmt_execute($check);$existing=mysqli_fetch_assoc(mysqli_stmt_get_result($check));
+  if($existing){$error=$existing['username']===$username?'That username is already taken.':($existing['email']===$email?'That email is already registered.':'That phone number is already registered.');}
+  else{$full=trim($first.' '.$last);$hash=password_hash($password,PASSWORD_DEFAULT);mysqli_begin_transaction($conn);try{$stmt=mysqli_prepare($conn,"INSERT INTO users (username,full_name,first_name,last_name,email,phone,password,role,gender,date_of_birth,address,city,country,postal_code,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active')");mysqli_stmt_bind_param($stmt,'ssssssssssssss',$username,$full,$first,$last,$email,$phone,$hash,$role,$gender,$dob,$address,$city,$country,$postal);if(!mysqli_stmt_execute($stmt))throw new Exception(mysqli_error($conn));$uid=mysqli_insert_id($conn);mysqli_commit($conn);$success='Account created successfully. You can sign in now.';$_POST=[];}catch(Throwable $e){mysqli_rollback($conn);$error='Registration could not be completed. Please try again.';}}
+ }
 }
+function old($key,$default=''){return htmlspecialchars($_POST[$key]??$default);}
 ?>
-
-<div class="container" style="max-width: 600px;">
-    <h2>Create an Account</h2>
-    <p style="color: #7f8c8d; margin-bottom: 20px;">Please fill in your profile details to register.</p>
-
-    <?php if ($error): ?>
-        <div class="alert alert-danger"><?php echo $error; ?></div>
-    <?php endif; ?>
-    <?php if ($success): ?>
-        <div class="alert alert-success"><?php echo $success; ?></div>
-    <?php endif; ?>
-
-    <form action="register.php" method="POST">
-        <div class="form-group">
-            <label>Register As</label>
-            <select name="role" class="form-control" required>
-                <option value="customer">Customer (Guest)</option>
-                <option value="owner">Hotel Owner</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Username</label>
-            <input type="text" name="username" class="form-control" required>
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <div class="form-group" style="flex: 1;">
-                <label>First Name</label>
-                <input type="text" name="first_name" class="form-control" required>
-            </div>
-            <div class="form-group" style="flex: 1;">
-                <label>Last Name</label>
-                <input type="text" name="last_name" class="form-control" required>
-            </div>
-        </div>
-        <div class="form-group">
-            <label>Email Address</label>
-            <input type="email" name="email" class="form-control" required>
-        </div>
-        <div class="form-group">
-            <label>Phone Number</label>
-            <input type="text" name="phone" class="form-control" required>
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <div class="form-group" style="flex: 1;">
-                <label>Gender</label>
-                <select name="gender" class="form-control" required>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                </select>
-            </div>
-            <div class="form-group" style="flex: 1;">
-                <label>Date of Birth</label>
-                <input type="date" name="date_of_birth" class="form-control" required>
-            </div>
-        </div>
-        <div class="form-group">
-            <label>Street Address</label>
-            <textarea name="address" class="form-control" rows="2" required></textarea>
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <div class="form-group" style="flex: 1;">
-                <label>City</label>
-                <input type="text" name="city" class="form-control" required>
-            </div>
-            <div class="form-group" style="flex: 1;">
-                <label>Country</label>
-                <input type="text" name="country" class="form-control" required>
-            </div>
-            <div class="form-group" style="flex: 1;">
-                <label>Postal Code</label>
-                <input type="text" name="postal_code" class="form-control">
-            </div>
-        </div>
-        <div class="form-group">
-            <label>Password</label>
-            <input type="password" name="password" class="form-control" required>
-        </div>
-        <div class="form-group">
-            <label>Confirm Password</label>
-            <input type="password" name="confirm_password" class="form-control" required>
-        </div>
-        <button type="submit" class="btn btn-primary btn-block">Register</button>
-    </form>
-    <p style="margin-top: 15px; text-align: center;">Already have an account? <a href="login.php">Login here</a></p>
-</div>
-
-<?php require_once 'includes/footer.php'; ?>
+<section class="auth-shell"><div class="auth-card register-card">
+<aside class="auth-side"><div><div class="hbs-eyebrow mb-4"><i class="fa-solid fa-user-plus"></i> Create your account</div><h2>Create your guest account and start booking.</h2><p>Public registration creates a guest account only. Hotel owner accounts are created and managed separately by the website administrator.</p></div><div class="auth-points"><div class="auth-point"><i class="fa-solid fa-bed"></i><span>Guest booking and reservation history</span></div><div class="auth-point"><i class="fa-solid fa-user-shield"></i><span>Owner and admin accounts are managed separately</span></div><div class="auth-point"><i class="fa-solid fa-lock"></i><span>Secure bcrypt password storage</span></div></div></aside>
+<div class="auth-form"><span class="text-primary fw-bold small">REGISTER</span><h1 class="mt-1">Create a StayFlow account</h1><p class="text-muted small mb-4">Enter your profile details. You can update them later.</p><?php if($error):?><div class="alert alert-danger py-2 small"><?=htmlspecialchars($error)?></div><?php endif;?><?php if($success):?><div class="alert alert-success py-2 small"><?=htmlspecialchars($success)?> <a href="login.php" class="fw-bold">Sign in</a></div><?php endif;?>
+<form method="POST" action="register.php"><div class="register-form-grid"><div><label class="form-label">First name</label><input class="form-control" name="first_name" required value="<?=old('first_name')?>"></div><div><label class="form-label">Last name</label><input class="form-control" name="last_name" required value="<?=old('last_name')?>"></div><div><label class="form-label">Username</label><input class="form-control" name="username" minlength="3" required value="<?=old('username')?>"></div><div><label class="form-label">Email</label><input class="form-control" type="email" name="email" required value="<?=old('email')?>"></div><div><label class="form-label">Phone</label><input class="form-control" name="phone" required value="<?=old('phone')?>"></div><div><label class="form-label">Date of birth</label><input class="form-control" type="date" name="date_of_birth" required value="<?=old('date_of_birth')?>"></div><div><label class="form-label">Gender</label><select class="form-select" name="gender"><?php foreach(['Male','Female','Other'] as $g):?><option value="<?=$g?>" <?=old('gender')===$g?'selected':''?>><?=$g?></option><?php endforeach;?></select></div><div><label class="form-label">City</label><input class="form-control" name="city" required value="<?=old('city')?>"></div><div><label class="form-label">Country</label><input class="form-control" name="country" required value="<?=old('country','Myanmar')?>"></div><div><label class="form-label">Postal code</label><input class="form-control" name="postal_code" value="<?=old('postal_code')?>"></div><div class="span-2"><label class="form-label">Address</label><textarea class="form-control" name="address" rows="2" required><?=old('address')?></textarea></div><div><label class="form-label">Password</label><input class="form-control" type="password" name="password" minlength="8" required></div><div><label class="form-label">Confirm password</label><input class="form-control" type="password" name="confirm_password" minlength="8" required></div><div class="span-2"><button class="btn btn-primary w-100 fw-bold" type="submit">Create account <i class="fa-solid fa-arrow-right ms-1"></i></button></div></div></form><p class="auth-note text-center mt-3 mb-0">Already registered? <a href="login.php" class="fw-bold text-decoration-none">Sign in</a></p></div>
+</div></section><?php require_once 'includes/footer.php';?>

@@ -263,7 +263,7 @@ if(
 
             ?
 
-            "banned"
+            "blocked"
 
             :
 
@@ -757,7 +757,7 @@ if($search !== ''){
 
     OR email LIKE ?
 
-    OR phone_number LIKE ?
+    OR phone LIKE ?
 
     )
 
@@ -1277,6 +1277,8 @@ gap:15px;
 </style>
 
 
+
+<link rel="stylesheet" href="../assets/css/admin-sidebar.css?v=2">
 </head>
 
 
@@ -1295,234 +1297,7 @@ gap:15px;
 <!-- SIDEBAR -->
 
 
-<aside class="sidebar">
-
-
-<div class="brand">
-
-
-<i class="fa-solid fa-hotel"></i>
-
-HBS V3 Admin
-
-
-</div>
-
-
-
-
-
-
-<ul class="list-unstyled">
-
-
-
-<li>
-
-<a href="dashboard.php">
-
-<i class="fa-solid fa-chart-line"></i>
-
-Dashboard
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="manage_commissions.php">
-
-<i class="fa-solid fa-hand-holding-dollar"></i>
-
-Commission
-
-</a>
-
-</li>
-
-
-
-
-
-
-<li class="active">
-
-<a href="users.php">
-
-<i class="fa-solid fa-users"></i>
-
-Users
-
-</a>
-
-</li>
-
-
-
-
-
-
-<li>
-
-<a href="owners.php">
-
-<i class="fa-solid fa-user-tie"></i>
-
-Hotel Owners
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="hotels.php">
-
-<i class="fa-solid fa-hotel"></i>
-
-Hotels
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="rooms.php">
-
-<i class="fa-solid fa-bed"></i>
-
-Rooms
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="bookings.php">
-
-<i class="fa-solid fa-calendar-check"></i>
-
-Bookings
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="payments.php">
-
-<i class="fa-solid fa-credit-card"></i>
-
-Payments
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="reviews.php">
-
-<i class="fa-solid fa-star"></i>
-
-Reviews
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="notifications.php">
-
-<i class="fa-solid fa-bell"></i>
-
-Notifications
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="audit_logs.php">
-
-<i class="fa-solid fa-clock-rotate-left"></i>
-
-Audit Logs
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="../logout.php">
-
-<i class="fa-solid fa-right-from-bracket"></i>
-
-Logout
-
-</a>
-
-</li>
-
-
-
-
-</ul>
-
-
-
-</aside>
-
-
-
-
-
-
-
-
+<?php include __DIR__ . '/../includes/admin_sidebar.php'; ?>
 
 <main class="main-content">
 
@@ -1930,14 +1705,14 @@ System Users
 <br>
 
 
-<?php if(!empty($u['phone_number'])): ?>
+<?php if(!empty($u['phone'])): ?>
 
 
 <small>
 
 <i class="fa fa-phone"></i>
 
-<?=htmlspecialchars($u['phone_number'])?>
+<?=htmlspecialchars($u['phone'])?>
 
 </small>
 
@@ -2080,7 +1855,7 @@ Deleted
 
 <span class="badge bg-danger">
 
-Banned
+Blocked
 
 </span>
 

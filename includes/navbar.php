@@ -9,7 +9,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <div class="bg-primary text-white rounded-3 p-2 d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
                 <i class="fa-solid fa-hotel fs-6"></i>
             </div>
-            <span class="fs-5 tracking-tight">HBS <span class="text-primary">v3</span></span>
+            <span class="fs-5 tracking-tight">Stay<span class="text-info">Flow</span></span>
         </a>
 
         <!-- Mobile Toggler -->
@@ -67,7 +67,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 <?php else: ?>
                     <a href="login.php" class="btn btn-link text-white text-decoration-none fw-semibold fs-7 px-3">Log In</a>
                     <a href="register.php" class="btn btn-primary rounded-pill px-4 py-2 fw-bold fs-7 shadow-sm">
-                        Get Started
+                        Register
                     </a>
                 <?php endif; ?>
             </div>

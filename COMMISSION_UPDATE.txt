@@ -1,0 +1,9 @@
+Owner Earnings Commission Update
+================================
+
+- Remaining Commission shows total unsubmitted commission owed to Admin.
+- One eligible booking = one commission submission.
+- Each outstanding booking has its own Pay Admin + payment slip form.
+- Server verifies booking ownership, booking status, and duplicate commission before insert.
+- Pending submissions stay in Commission History until Admin marks them Paid.
+- No database schema change is required for this update.

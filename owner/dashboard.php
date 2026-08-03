@@ -3,17 +3,19 @@
 require_once '../config/config.php';
 
 
+/*
+===========================================
+1. SESSION & OWNER AUTHENTICATION
+===========================================
+*/
+
 if(session_status() === PHP_SESSION_NONE){
+
     session_start();
+
 }
 
 
-
-/*
-================================
-OWNER AUTH
-================================
-*/
 
 if(
     !isset($_SESSION['user_id']) ||
@@ -27,9 +29,10 @@ if(
 }
 
 
+
 $owner_id = $_SESSION['user_id'];
 
-
+$msg = "";
 $error = "";
 
 
@@ -38,17 +41,22 @@ $error = "";
 
 
 
+
+
 /*
-================================
-CSRF TOKEN
-================================
+===========================================
+2. CSRF TOKEN
+===========================================
 */
 
+
 if(empty($_SESSION['csrf_token'])){
+
 
     $_SESSION['csrf_token'] =
     bin2hex(random_bytes(32));
 
+
 }
 
 
@@ -58,70 +66,90 @@ if(empty($_SESSION['csrf_token'])){
 
 
 
+
 /*
-================================
-AUDIT LOG
-================================
+===========================================
+3. AUDIT LOG FUNCTION
+===========================================
 */
+
 
 function insertOwnerAudit(
 
-$conn,
-$user_id,
-$action,
-$table,
-$record_id
+    $conn,
+    $user_id,
+    $action,
+    $table_name,
+    $record_id
 
 ){
 
 
-$stmt=mysqli_prepare(
-
-$conn,
-
-"
-INSERT INTO audit_logs
-
-(
-user_id,
-action,
-table_name,
-record_id,
-ip_address,
-user_agent
-)
-
-VALUES(?,?,?,?,?,?)
-
-"
-
-);
+    $ip =
+    $_SERVER['REMOTE_ADDR']
+    ??
+    '127.0.0.1';
 
 
-$ip=$_SERVER['REMOTE_ADDR'] ?? '';
-
-$agent=$_SERVER['HTTP_USER_AGENT'] ?? '';
+    $agent =
+    $_SERVER['HTTP_USER_AGENT']
+    ??
+    'Unknown';
 
 
 
-mysqli_stmt_bind_param(
+    $stmt = mysqli_prepare(
 
-$stmt,
+        $conn,
 
-"ississ",
+        "
 
-$user_id,
-$action,
-$table,
-$record_id,
-$ip,
-$agent
+        INSERT INTO audit_logs
 
-);
+        (
+
+        user_id,
+        action,
+        table_name,
+        record_id,
+        ip_address,
+        user_agent
+
+        )
+
+        VALUES
+
+        (?,?,?,?,?,?)
+
+        "
+
+    );
 
 
 
-mysqli_stmt_execute($stmt);
+    mysqli_stmt_bind_param(
+
+        $stmt,
+
+        "ississ",
+
+        $user_id,
+
+        $action,
+
+        $table_name,
+
+        $record_id,
+
+        $ip,
+
+        $agent
+
+    );
+
+
+
+    mysqli_stmt_execute($stmt);
 
 
 }
@@ -133,42 +161,420 @@ mysqli_stmt_execute($stmt);
 
 
 
+
 /*
-================================
-UPDATE BOOKING STATUS
-================================
+===========================================
+4. UPDATE BOOKING STATUS
+===========================================
 */
 
 
 if(
-
-$_SERVER['REQUEST_METHOD']=="POST"
-
-&&
-
-isset($_POST['update_booking_status'])
-
+    $_SERVER['REQUEST_METHOD']==='POST'
+    &&
+    isset($_POST['update_booking_status'])
 ){
 
 
 
-if(
+    if(
+        !isset($_POST['csrf_token'])
+        ||
+        !hash_equals(
 
-!isset($_POST['csrf_token'])
+            $_SESSION['csrf_token'],
 
-||
+            $_POST['csrf_token']
 
-!hash_equals(
+        )
+    ){
 
-$_SESSION['csrf_token'],
+        die("Invalid CSRF Token");
 
-$_POST['csrf_token']
+    }
 
-)
 
-){
 
-die("Invalid CSRF Token");
+
+
+
+    $booking_id =
+
+    intval(
+
+        $_POST['booking_id'] ?? 0
+
+    );
+
+
+
+    $new_status =
+
+    trim(
+
+        $_POST['status_value'] ?? ''
+
+    );
+
+
+
+
+
+    $allowed_status = [
+
+        'Pending',
+        'Confirmed',
+        'Checked Out',
+        'Cancelled'
+
+    ];
+
+
+
+
+
+
+
+    if(
+
+        $booking_id > 0
+
+        &&
+
+        in_array(
+
+            $new_status,
+
+            $allowed_status
+
+        )
+
+    ){
+
+
+
+        /*
+        ===========================
+        CHECK OWNER ACCESS
+        ===========================
+        */
+
+
+        $check_stmt = mysqli_prepare(
+
+            $conn,
+
+            "
+
+            SELECT
+
+
+            b.booking_code,
+
+            b.customer_id,
+
+            h.hotel_name
+
+
+            FROM bookings b
+
+
+            LEFT JOIN hotels h
+
+
+            ON b.hotel_id=h.hotel_id
+
+
+            WHERE
+
+            b.booking_id=?
+
+            AND
+
+            h.owner_id=?
+
+
+            "
+
+        );
+
+
+
+        mysqli_stmt_bind_param(
+
+            $check_stmt,
+
+            "ii",
+
+            $booking_id,
+
+            $owner_id
+
+        );
+
+
+
+        mysqli_stmt_execute(
+
+            $check_stmt
+
+        );
+
+
+
+        $booking_result =
+
+        mysqli_stmt_get_result(
+
+            $check_stmt
+
+        );
+
+
+
+        $booking =
+
+        mysqli_fetch_assoc(
+
+            $booking_result
+
+        );
+
+
+
+
+
+
+
+
+        if($booking){
+
+
+
+            /*
+            ===========================
+            UPDATE BOOKING
+            ===========================
+            */
+
+
+            $update_stmt = mysqli_prepare(
+
+                $conn,
+
+                "
+
+                UPDATE bookings
+
+                SET booking_status=?
+
+                WHERE booking_id=?
+
+                "
+
+            );
+
+
+
+            mysqli_stmt_bind_param(
+
+                $update_stmt,
+
+                "si",
+
+                $new_status,
+
+                $booking_id
+
+            );
+
+
+
+            mysqli_stmt_execute(
+
+                $update_stmt
+
+            );
+
+
+
+
+
+
+
+
+
+            /*
+            ===========================
+            CUSTOMER NOTIFICATION
+            ===========================
+            */
+
+
+            if(!empty($booking['customer_id'])){
+
+
+                $title =
+
+                "Reservation Status Update";
+
+
+
+                $message =
+
+                "Your booking "
+
+                .
+
+                $booking['booking_code']
+
+                .
+
+                " at "
+
+                .
+
+                $booking['hotel_name']
+
+                .
+
+                " is now "
+
+                .
+
+                strtoupper($new_status);
+
+
+
+
+
+
+
+                $notify_stmt = mysqli_prepare(
+
+                    $conn,
+
+                    "
+
+                    INSERT INTO notifications
+
+                    (
+
+                    user_id,
+
+                    title,
+
+                    message,
+
+                    type,
+
+                    is_read,
+
+                    created_at
+
+                    )
+
+
+                    VALUES
+
+                    (?,?,?,'booking',0,NOW())
+
+
+                    "
+
+                );
+
+
+
+
+
+                mysqli_stmt_bind_param(
+
+                    $notify_stmt,
+
+                    "iss",
+
+                    $booking['customer_id'],
+
+                    $title,
+
+                    $message
+
+                );
+
+
+
+                mysqli_stmt_execute(
+
+                    $notify_stmt
+
+                );
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+            /*
+            ===========================
+            AUDIT LOG
+            ===========================
+            */
+
+
+            insertOwnerAudit(
+
+                $conn,
+
+                $owner_id,
+
+                "BOOKING_STATUS_UPDATED",
+
+                "bookings",
+
+                $booking_id
+
+            );
+
+
+
+
+
+
+
+
+            header(
+
+                "Location: dashboard.php?msg=updated"
+
+            );
+
+
+            exit();
+
+
+
+        }
+
+        else{
+
+
+            $error =
+
+            "Unauthorized booking action.";
+
+        }
+
+
+    }
+
 
 }
 
@@ -176,189 +582,184 @@ die("Invalid CSRF Token");
 
 
 
-$booking_id =
-intval($_POST['booking_id']);
 
-
-
-$status =
-trim($_POST['status_value']);
-
-
-
-
-$allowed_status=[
-
-"Pending",
-"Confirmed",
-"Checked Out",
-"Cancelled"
-
-];
-
-
-
-
-if(in_array($status,$allowed_status)){
-
-
-
-$check=mysqli_prepare(
-
-$conn,
-
-"
-SELECT
-
-b.customer_id,
-
-b.booking_code,
-
-h.hotel_name
-
-FROM bookings b
-
-JOIN hotels h
-
-ON b.hotel_id=h.hotel_id
-
-
-WHERE b.booking_id=?
-
-AND h.owner_id=?
-
-"
-
-);
-
-
-
-mysqli_stmt_bind_param(
-
-$check,
-
-"ii",
-
-$booking_id,
-
-$owner_id
-
-);
-
-
-
-mysqli_stmt_execute($check);
-
-
-$result=mysqli_stmt_get_result($check);
-
-
-$booking=mysqli_fetch_assoc($result);
-
-
-
-
-if($booking){
-
-
-
-$update=mysqli_prepare(
-
-$conn,
-
-"
-UPDATE bookings
-
-SET booking_status=?
-
-WHERE booking_id=?
-
-"
-
-);
-
-
-
-mysqli_stmt_bind_param(
-
-$update,
-
-"si",
-
-$status,
-
-$booking_id
-
-);
-
-
-
-mysqli_stmt_execute($update);
-
-
-
-
-insertOwnerAudit(
-
-$conn,
-
-$owner_id,
-
-"UPDATE_BOOKING_STATUS",
-
-"bookings",
-
-$booking_id
-
-);
-
-
-
-header(
-
-"Location: dashboard.php?msg=updated"
-
-);
-
-
-exit();
-
-
-
-}
-
-
-}
-
-
-
-}
 
 
 
 /*
-================================
-OWNER STATISTICS FUNCTION
-================================
+===========================================
+5. OWNER STATISTICS
+===========================================
 */
 
 
 function getOwnerCount(
 
-$conn,
+    $conn,
 
-$sql,
+    $sql,
 
-$owner_id
+    $owner_id
 
 ){
 
 
-$stmt=mysqli_prepare(
+    $stmt = mysqli_prepare(
 
-$conn,
+        $conn,
 
-$sql
+        $sql
+
+    );
+
+
+
+    mysqli_stmt_bind_param(
+
+        $stmt,
+
+        "i",
+
+        $owner_id
+
+    );
+
+
+
+    mysqli_stmt_execute($stmt);
+
+
+
+    $result =
+
+    mysqli_stmt_get_result($stmt);
+
+
+
+    $data =
+
+    mysqli_fetch_assoc($result);
+
+
+
+    return $data['total'] ?? 0;
+
+
+}
+
+
+
+
+
+
+
+
+$total_hotels = getOwnerCount(
+
+    $conn,
+
+    "
+
+    SELECT COUNT(*) total
+
+    FROM hotels
+
+    WHERE owner_id=?
+
+    ",
+
+    $owner_id
+
+);
+
+
+
+
+
+$total_bookings = getOwnerCount(
+
+    $conn,
+
+    "
+
+    SELECT COUNT(b.booking_id) total
+
+    FROM bookings b
+
+    LEFT JOIN hotels h
+
+    ON b.hotel_id=h.hotel_id
+
+    WHERE h.owner_id=?
+
+    ",
+
+    $owner_id
+
+);
+
+
+
+
+
+$active_guests = getOwnerCount(
+
+    $conn,
+
+    "
+
+    SELECT COUNT(b.booking_id) total
+
+    FROM bookings b
+
+    LEFT JOIN hotels h
+
+    ON b.hotel_id=h.hotel_id
+
+    WHERE h.owner_id=?
+
+    AND b.booking_status='Confirmed'
+
+    ",
+
+    $owner_id
+
+);
+
+
+
+
+
+
+
+
+
+/*
+Revenue Query
+*/
+
+
+$earnings_stmt = mysqli_prepare(
+
+    $conn,
+
+    "
+
+    SELECT SUM(b.total_amount) total
+
+    FROM bookings b
+
+    LEFT JOIN hotels h
+
+    ON b.hotel_id=h.hotel_id
+
+    WHERE h.owner_id=?
+
+    AND b.booking_status IN
+
+    ('Confirmed','Checked Out')
+
+    "
 
 );
 
@@ -366,29 +767,151 @@ $sql
 
 mysqli_stmt_bind_param(
 
-$stmt,
+    $earnings_stmt,
 
-"i",
+    "i",
 
-$owner_id
+    $owner_id
 
 );
 
 
 
-mysqli_stmt_execute($stmt);
+mysqli_stmt_execute(
+
+    $earnings_stmt
+
+);
 
 
 
-$result=mysqli_stmt_get_result($stmt);
+$earnings_result =
+
+mysqli_stmt_get_result(
+
+    $earnings_stmt
+
+);
 
 
 
-$data=mysqli_fetch_assoc($result);
+$total_earnings =
+
+mysqli_fetch_assoc(
+
+    $earnings_result
+
+)['total'] ?? 0;
 
 
 
-return $data['total'] ?? 0;
+
+
+
+
+
+
+/*
+===========================================
+6. SEARCH & FILTER
+===========================================
+*/
+
+
+$search =
+
+trim(
+
+    $_GET['search'] ?? ''
+
+);
+
+
+
+$status_filter =
+
+trim(
+
+    $_GET['status'] ?? ''
+
+);
+
+
+
+
+
+$where = [];
+
+$params = [];
+
+$types = "i";
+
+
+
+
+
+
+$params[] = $owner_id;
+
+
+
+
+
+if($search !== ''){
+
+
+    $where[] = "
+
+    (
+
+    b.booking_code LIKE ?
+
+    OR h.hotel_name LIKE ?
+
+    OR u.full_name LIKE ?
+
+    )
+
+    ";
+
+
+
+    $keyword = "%".$search."%";
+
+
+
+    $params[]=$keyword;
+
+    $params[]=$keyword;
+
+    $params[]=$keyword;
+
+
+
+    $types.="sss";
+
+
+}
+
+
+
+
+
+
+
+if($status_filter !== ''){
+
+
+    $where[] =
+
+    "b.booking_status=?";
+
+
+
+    $params[]=$status_filter;
+
+
+    $types.="s";
 
 
 }
@@ -400,306 +923,22 @@ return $data['total'] ?? 0;
 
 
 
-/*
-================================
-TOTAL HOTELS
-================================
-*/
-
-
-$total_hotels=getOwnerCount(
-
-$conn,
-
-"
-SELECT COUNT(*) total
-
-FROM hotels
-
-WHERE owner_id=?
-
-",
-
-$owner_id
-
-);
-
-
-
-
-
-
-
-
-
-/*
-================================
-TOTAL BOOKINGS
-================================
-*/
-
-
-$total_bookings=getOwnerCount(
-
-$conn,
-
-"
-SELECT COUNT(b.booking_id) total
-
-FROM bookings b
-
-JOIN hotels h
-
-ON b.hotel_id=h.hotel_id
-
-WHERE h.owner_id=?
-
-",
-
-$owner_id
-
-);
-
-
-
-
-
-
-
-
-
-/*
-================================
-ACTIVE GUESTS
-================================
-*/
-
-
-$active_guests=getOwnerCount(
-
-$conn,
-
-"
-SELECT COUNT(b.booking_id) total
-
-FROM bookings b
-
-JOIN hotels h
-
-ON b.hotel_id=h.hotel_id
-
-WHERE h.owner_id=?
-
-AND b.booking_status='Confirmed'
-
-",
-
-$owner_id
-
-);
-
-
-
-
-
-
-
-
-
-/*
-================================
-TOTAL REVENUE
-================================
-*/
-
-
-$earn_stmt=mysqli_prepare(
-
-$conn,
-
-"
-SELECT
-
-COALESCE(SUM(b.total_amount),0) total
-
-
-FROM bookings b
-
-
-JOIN hotels h
-
-ON b.hotel_id=h.hotel_id
-
-
-WHERE h.owner_id=?
-
-
-AND b.booking_status IN
-
-('Confirmed','Checked Out')
-
-"
-
-);
-
-
-
-mysqli_stmt_bind_param(
-
-$earn_stmt,
-
-"i",
-
-$owner_id
-
-);
-
-
-
-mysqli_stmt_execute($earn_stmt);
-
-
-
-$earn_result=mysqli_stmt_get_result($earn_stmt);
-
-
-
-$total_earnings=
-
-mysqli_fetch_assoc($earn_result)['total'];
-
-
-
-
-
-
-
-
-
-/*
-================================
-SEARCH FILTER
-================================
-*/
-
-
-$search=
-
-trim($_GET['search'] ?? '');
-
-
-
-$status_filter=
-
-trim($_GET['status'] ?? '');
-
-
-
-
-
-$where=[];
-
-$params=[];
-
-$types="i";
-
-
-
-$params[]=$owner_id;
-
-
-
-
-
-
-
-if($search!=""){
-
-
-
-$where[]="
-
-(
-
-b.booking_code LIKE ?
-
-OR h.hotel_name LIKE ?
-
-OR u.full_name LIKE ?
-
-)
-
-";
-
-
-
-$key="%".$search."%";
-
-
-
-$params[]=$key;
-
-$params[]=$key;
-
-$params[]=$key;
-
-
-$types.="sss";
-
-
-}
-
-
-
-
-
-
-
-
-if($status_filter!=""){
-
-
-
-$where[]="
-
-b.booking_status=?
-
-";
-
-
-
-$params[]=$status_filter;
-
-
-$types.="s";
-
-
-}
-
-
-
-
-
-
-
-
-$where_sql="";
+$where_sql = "";
 
 
 
 if(count($where)>0){
 
 
+    $where_sql =
 
-$where_sql=
+    " AND ".implode(
 
-" AND ".implode(
+        " AND ",
 
-" AND ",
+        $where
 
-$where
-
-);
+    );
 
 
 }
@@ -713,99 +952,34 @@ $where
 
 
 /*
-================================
-PAGINATION
-================================
+===========================================
+7. PAGINATION
+===========================================
 */
 
 
-$limit=20;
+$limit = 20;
 
 
-$page=
+$page =
 
-intval($_GET['page'] ?? 1);
+intval(
+
+    $_GET['page'] ?? 1
+
+);
 
 
 
-if($page<1){
+if($page < 1){
 
-$page=1;
+    $page=1;
 
 }
 
 
 
-
-
-$count_sql=mysqli_prepare(
-
-$conn,
-
-"
-SELECT COUNT(b.booking_id) total
-
-FROM bookings b
-
-JOIN hotels h
-
-ON b.hotel_id=h.hotel_id
-
-
-LEFT JOIN users u
-
-ON b.customer_id=u.user_id
-
-
-WHERE h.owner_id=?
-
-$where_sql
-
-"
-
-);
-
-
-
-mysqli_stmt_bind_param(
-
-$count_sql,
-
-$types,
-
-...$params
-
-);
-
-
-
-mysqli_stmt_execute($count_sql);
-
-
-
-$count_result=mysqli_stmt_get_result($count_sql);
-
-
-
-$total_records=
-
-mysqli_fetch_assoc($count_result)['total'] ?? 0;
-
-
-
-$total_pages=
-
-ceil(
-
-$total_records/$limit
-
-);
-
-
-
-
-
-$offset=
+$offset =
 
 ($page-1)*$limit;
 
@@ -818,13 +992,13 @@ $offset=
 
 
 /*
-================================
-FETCH BOOKINGS
-================================
+===========================================
+8. FETCH BOOKINGS
+===========================================
 */
 
 
-$sql=
+$sql =
 
 "
 
@@ -833,12 +1007,9 @@ SELECT
 
 b.*,
 
-
 h.hotel_name,
 
-
 u.full_name customer_name,
-
 
 u.email customer_email
 
@@ -848,7 +1019,7 @@ FROM bookings b
 
 
 
-JOIN hotels h
+LEFT JOIN hotels h
 
 ON b.hotel_id=h.hotel_id
 
@@ -866,30 +1037,23 @@ WHERE h.owner_id=?
 $where_sql
 
 
-
 ORDER BY b.created_at DESC
 
 
-
 LIMIT ? OFFSET ?
-
 
 
 ";
 
 
 
+$stmt = mysqli_prepare(
 
+    $conn,
 
-$stmt=mysqli_prepare(
-
-$conn,
-
-$sql
+    $sql
 
 );
-
-
 
 
 
@@ -898,23 +1062,19 @@ $params[]=$limit;
 $params[]=$offset;
 
 
-
 $types.="ii";
-
 
 
 
 mysqli_stmt_bind_param(
 
-$stmt,
+    $stmt,
 
-$types,
+    $types,
 
-...$params
+    ...$params
 
 );
-
-
 
 
 
@@ -922,7 +1082,7 @@ mysqli_stmt_execute($stmt);
 
 
 
-$bookings_result=
+$bookings_result =
 
 mysqli_stmt_get_result($stmt);
 
@@ -935,22 +1095,24 @@ mysqli_stmt_get_result($stmt);
 
 
 /*
-================================
-NOTIFICATION COUNT
-================================
+Notification Count
 */
 
 
-$noti_stmt=mysqli_prepare(
+$total_notifications = 0;
+
+
+$noti_result = mysqli_query(
 
 $conn,
 
 "
+
 SELECT COUNT(*) total
 
 FROM notifications
 
-WHERE user_id=?
+WHERE user_id='$owner_id'
 
 AND is_read=0
 
@@ -960,68 +1122,42 @@ AND is_read=0
 
 
 
-mysqli_stmt_bind_param(
-
-$noti_stmt,
-
-"i",
-
-$owner_id
-
-);
+if($noti_result){
 
 
+$total_notifications =
 
-mysqli_stmt_execute($noti_stmt);
+mysqli_fetch_assoc(
+
+    $noti_result
+
+)['total'] ?? 0;
 
 
+}
 
-$noti_result=mysqli_stmt_get_result($noti_stmt);
-
-
-
-$total_notifications=
-
-mysqli_fetch_assoc($noti_result)['total'] ?? 0;
 
 
 ?>
-
 <!DOCTYPE html>
-
 <html lang="en">
 
 <head>
 
 <meta charset="UTF-8">
 
-<title>
-Owner Dashboard | Hotel Partner Hub
-</title>
-
+<title>Owner Dashboard | Hotel Partner Hub</title>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-
-rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
 
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-
-rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 
 
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-
-rel="stylesheet">
-
-
-<link href="../assets/css/owner.css"
-
-rel="stylesheet">
-
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
 
 <style>
@@ -1033,7 +1169,111 @@ font-family:'Poppins',sans-serif;
 
 background:#f4f6f9;
 
+color:#333;
+
 }
+
+
+
+.wrapper{
+
+display:flex;
+
+min-height:100vh;
+
+}
+
+
+
+
+.sidebar{
+
+width:260px;
+
+background:#0f172a;
+
+color:white;
+
+position:fixed;
+
+top:0;
+
+bottom:0;
+
+left:0;
+
+overflow-y:auto;
+
+}
+
+
+
+.brand{
+
+padding:20px;
+
+font-size:19px;
+
+font-weight:700;
+
+color:#38bdf8;
+
+border-bottom:1px solid #1e293b;
+
+display:flex;
+
+align-items:center;
+
+gap:10px;
+
+}
+
+
+
+.sidebar ul{
+
+list-style:none;
+
+padding:10px 0;
+
+margin:0;
+
+}
+
+
+
+.sidebar ul li a{
+
+display:flex;
+
+align-items:center;
+
+gap:12px;
+
+padding:12px 20px;
+
+color:#94a3b8;
+
+text-decoration:none;
+
+font-size:14px;
+
+}
+
+
+
+.sidebar ul li a:hover,
+.sidebar ul li.active a{
+
+background:#1e293b;
+
+color:#38bdf8;
+
+border-left:4px solid #38bdf8;
+
+}
+
+
 
 
 
@@ -1041,7 +1281,133 @@ background:#f4f6f9;
 
 margin-left:260px;
 
-padding:30px;
+width:calc(100% - 260px);
+
+padding:25px 30px;
+
+}
+
+
+
+
+
+.topbar{
+
+background:white;
+
+padding:18px 25px;
+
+border-radius:12px;
+
+box-shadow:0 2px 12px rgba(0,0,0,.05);
+
+display:flex;
+
+justify-content:space-between;
+
+align-items:center;
+
+margin-bottom:25px;
+
+}
+
+
+
+
+.card-box{
+
+background:white;
+
+padding:22px;
+
+border-radius:12px;
+
+box-shadow:0 2px 10px rgba(0,0,0,.03);
+
+margin-bottom:25px;
+
+border:1px solid #eef2f6;
+
+}
+
+
+
+
+.stat-card{
+
+border-radius:14px;
+
+padding:22px;
+
+background:white;
+
+box-shadow:0 3px 10px rgba(0,0,0,.04);
+
+height:100%;
+
+}
+
+
+
+.stat-icon{
+
+width:50px;
+
+height:50px;
+
+border-radius:50%;
+
+display:flex;
+
+align-items:center;
+
+justify-content:center;
+
+font-size:22px;
+
+}
+
+
+
+
+
+.table td{
+
+vertical-align:middle;
+
+}
+
+
+
+
+@media(max-width:768px){
+
+
+.sidebar{
+
+position:relative;
+
+width:100%;
+
+}
+
+
+
+.wrapper{
+
+display:block;
+
+}
+
+
+
+.main-content{
+
+margin-left:0;
+
+width:100%;
+
+padding:15px;
 
 }
 
@@ -1049,55 +1415,22 @@ padding:30px;
 
 .topbar{
 
-background:#fff;
+flex-direction:column;
 
-padding:20px;
-
-border-radius:15px;
-
-box-shadow:0 3px 12px rgba(0,0,0,.05);
-
-margin-bottom:25px;
+gap:15px;
 
 }
 
 
-
-.card-box{
-
-background:#fff;
-
-padding:22px;
-
-border-radius:15px;
-
-box-shadow:0 3px 12px rgba(0,0,0,.05);
-
-margin-bottom:25px;
-
-}
-
-
-
-.stat-card{
-
-background:#fff;
-
-padding:20px;
-
-border-radius:15px;
-
-box-shadow:0 3px 12px rgba(0,0,0,.05);
 
 }
 
 
 
 </style>
-
+<link href="../assets/css/owner.css" rel="stylesheet">
 
 </head>
-
 
 
 
@@ -1108,7 +1441,17 @@ box-shadow:0 3px 12px rgba(0,0,0,.05);
 <div class="wrapper">
 
 
+
+
+
 <?php include '../includes/owner_sidebar.php'; ?>
+
+
+
+
+
+
+
 
 
 
@@ -1118,28 +1461,34 @@ box-shadow:0 3px 12px rgba(0,0,0,.05);
 
 
 
-<div class="topbar d-flex justify-content-between align-items-center">
+
+
+<!-- TOP BAR -->
+
+<header class="topbar">
 
 
 <div>
 
 
-<h3 class="fw-bold">
+<h4 class="fw-bold mb-1">
 
 
-<i class="fa-solid fa-chart-line text-primary"></i>
+<i class="fa-solid fa-chart-line text-primary me-2"></i>
+
 
 Owner Dashboard
 
 
-</h3>
+</h4>
 
 
-<p class="text-muted mb-0">
+<small class="text-muted">
 
-Hotel management overview
+Monitor hotels, bookings and revenue performance
 
-</p>
+
+</small>
 
 
 </div>
@@ -1147,12 +1496,21 @@ Hotel management overview
 
 
 
+
+
+
+<div>
+
+
 <a href="notifications.php"
 
-class="btn btn-light position-relative">
+class="btn btn-light position-relative rounded-circle">
 
 
 <i class="fa-solid fa-bell"></i>
+
+
+
 
 
 <?php if($total_notifications>0): ?>
@@ -1160,7 +1518,9 @@ class="btn btn-light position-relative">
 
 <span class="badge bg-danger position-absolute top-0 start-100 translate-middle">
 
+
 <?=$total_notifications?>
+
 
 </span>
 
@@ -1168,10 +1528,17 @@ class="btn btn-light position-relative">
 <?php endif; ?>
 
 
+
 </a>
 
 
 </div>
+
+
+
+</header>
+
+
 
 
 
@@ -1184,7 +1551,12 @@ class="btn btn-light position-relative">
 
 <div class="alert alert-success">
 
+
+<i class="fa-solid fa-circle-check"></i>
+
+
 Booking status updated successfully.
+
 
 </div>
 
@@ -1196,13 +1568,17 @@ Booking status updated successfully.
 
 
 
-
-<?php if($error!=""): ?>
+<?php if(!empty($error)): ?>
 
 
 <div class="alert alert-danger">
 
+
+<i class="fa-solid fa-triangle-exclamation"></i>
+
+
 <?=htmlspecialchars($error)?>
+
 
 </div>
 
@@ -1217,40 +1593,62 @@ Booking status updated successfully.
 
 
 
-<!-- STATISTICS -->
+<!-- STATISTICS CARDS -->
 
 
 <div class="row g-4 mb-4">
 
 
 
+
+
 <div class="col-md-3">
 
 
 <div class="stat-card">
 
 
-<h6 class="text-muted">
+<div class="d-flex align-items-center gap-3">
+
+
+<div class="stat-icon bg-primary-subtle text-primary">
+
+
+<i class="fa-solid fa-hotel"></i>
+
+
+</div>
+
+
+<div>
+
+
+<h6 class="text-muted mb-1">
 
 Hotels
 
 </h6>
 
 
-<h2 class="fw-bold">
+<h3 class="fw-bold mb-0">
 
 <?=$total_hotels?>
 
-</h2>
-
-
-<i class="fa-solid fa-hotel text-primary fa-2x"></i>
+</h3>
 
 
 </div>
 
 
 </div>
+
+
+</div>
+
+
+</div>
+
+
 
 
 
@@ -1264,27 +1662,47 @@ Hotels
 <div class="stat-card">
 
 
-<h6 class="text-muted">
+<div class="d-flex align-items-center gap-3">
+
+
+<div class="stat-icon bg-success-subtle text-success">
+
+
+<i class="fa-solid fa-calendar-check"></i>
+
+
+</div>
+
+
+<div>
+
+
+<h6 class="text-muted mb-1">
 
 Bookings
 
 </h6>
 
 
-<h2 class="fw-bold">
+<h3 class="fw-bold mb-0">
 
 <?=$total_bookings?>
 
-</h2>
-
-
-<i class="fa-solid fa-calendar-check text-success fa-2x"></i>
+</h3>
 
 
 </div>
 
 
 </div>
+
+
+</div>
+
+
+</div>
+
+
 
 
 
@@ -1298,27 +1716,47 @@ Bookings
 <div class="stat-card">
 
 
-<h6 class="text-muted">
+<div class="d-flex align-items-center gap-3">
+
+
+<div class="stat-icon bg-warning-subtle text-warning">
+
+
+<i class="fa-solid fa-user-check"></i>
+
+
+</div>
+
+
+<div>
+
+
+<h6 class="text-muted mb-1">
 
 Active Guests
 
 </h6>
 
 
-<h2 class="fw-bold">
+<h3 class="fw-bold mb-0">
 
 <?=$active_guests?>
 
-</h2>
-
-
-<i class="fa-solid fa-users text-warning fa-2x"></i>
+</h3>
 
 
 </div>
 
 
 </div>
+
+
+</div>
+
+
+</div>
+
+
 
 
 
@@ -1332,21 +1770,40 @@ Active Guests
 <div class="stat-card">
 
 
-<h6 class="text-muted">
+<div class="d-flex align-items-center gap-3">
+
+
+<div class="stat-icon bg-info-subtle text-info">
+
+
+<i class="fa-solid fa-wallet"></i>
+
+
+</div>
+
+
+<div>
+
+
+<h6 class="text-muted mb-1">
 
 Revenue
 
 </h6>
 
 
-<h2 class="fw-bold">
+<h3 class="fw-bold mb-0">
+
 
 <?=number_format($total_earnings,2)?>
 
-</h2>
+</h3>
 
 
-<i class="fa-solid fa-money-bill text-info fa-2x"></i>
+</div>
+
+
+</div>
 
 
 </div>
@@ -1356,6 +1813,7 @@ Revenue
 
 
 
+
 </div>
 
 
@@ -1366,7 +1824,7 @@ Revenue
 
 
 
-<!-- FILTER -->
+<!-- SEARCH FILTER -->
 
 
 <div class="card-box">
@@ -1375,6 +1833,8 @@ Revenue
 <form method="GET"
 
 class="row g-3">
+
+
 
 
 
@@ -1387,12 +1847,13 @@ name="search"
 
 class="form-control"
 
-placeholder="Search booking..."
+placeholder="Search booking code, hotel, customer..."
 
 value="<?=htmlspecialchars($search)?>">
 
 
 </div>
+
 
 
 
@@ -1414,38 +1875,55 @@ All Status
 </option>
 
 
-<option value="Pending">
+
+<option value="Pending"
+
+<?=$status_filter=="Pending"?'selected':''?>>
 
 Pending
 
 </option>
 
 
-<option value="Confirmed">
+
+
+<option value="Confirmed"
+
+<?=$status_filter=="Confirmed"?'selected':''?>>
 
 Confirmed
 
 </option>
 
 
-<option value="Checked Out">
+
+
+<option value="Checked Out"
+
+<?=$status_filter=="Checked Out"?'selected':''?>>
 
 Checked Out
 
 </option>
 
 
-<option value="Cancelled">
+
+
+<option value="Cancelled"
+
+<?=$status_filter=="Cancelled"?'selected':''?>>
 
 Cancelled
 
 </option>
 
 
+
 </select>
 
 
 </div>
+
 
 
 
@@ -1461,13 +1939,14 @@ Cancelled
 
 <i class="fa-solid fa-filter"></i>
 
-Search
+Filter
 
 
 </button>
 
 
 </div>
+
 
 
 </form>
@@ -1483,7 +1962,7 @@ Search
 
 
 
-<!-- BOOKINGS -->
+<!-- BOOKINGS TABLE -->
 
 
 <div class="card-box">
@@ -1491,9 +1970,17 @@ Search
 
 <h5 class="fw-bold mb-3">
 
+
+<i class="fa-solid fa-list text-primary"></i>
+
+
 Recent Bookings
 
+
 </h5>
+
+
+
 
 
 
@@ -1501,7 +1988,7 @@ Recent Bookings
 <div class="table-responsive">
 
 
-<table class="table table-hover">
+<table class="table table-hover align-middle">
 
 
 <thead class="table-light">
@@ -1509,17 +1996,21 @@ Recent Bookings
 
 <tr>
 
+
 <th>Code</th>
 
 <th>Hotel</th>
 
 <th>Customer</th>
 
+<th>Date</th>
+
 <th>Amount</th>
 
 <th>Status</th>
 
 <th>Action</th>
+
 
 </tr>
 
@@ -1528,24 +2019,32 @@ Recent Bookings
 
 
 
+
+
 <tbody>
 
 
+<?php if($bookings_result && mysqli_num_rows($bookings_result)>0): ?>
 
-<?php if(mysqli_num_rows($bookings_result)>0): ?>
 
 
 <?php while($b=mysqli_fetch_assoc($bookings_result)): ?>
 
 
+
 <tr>
 
 
-
 <td>
+
+
+<strong class="text-primary">
 
 <?=htmlspecialchars($b['booking_code'])?>
 
+</strong>
+
+
 </td>
 
 
@@ -1553,7 +2052,8 @@ Recent Bookings
 
 <td>
 
-<?=htmlspecialchars($b['hotel_name'])?>
+
+<?=htmlspecialchars($b['hotel_name'] ?? '-')?>
 
 </td>
 
@@ -1561,40 +2061,85 @@ Recent Bookings
 
 
 <td>
+
 
 <?=htmlspecialchars($b['customer_name'] ?? '-')?>
 
+
 <br>
 
-<small>
 
-<?=htmlspecialchars($b['customer_email'] ?? '')?>
+<small class="text-muted">
+
+<?=htmlspecialchars($b['customer_email'] ?? '-')?>
 
 </small>
 
-</td>
-
-
-
-
-<td>
-
-<?=number_format($b['total_amount'] ?? 0,2)?> MMK
 
 </td>
 
 
 
 
+
 <td>
+
+
+<?=
+
+!empty($b['check_in'])
+
+?
+
+date("d M Y",strtotime($b['check_in']))
+
+:
+
+"N/A"
+
+?>
+
+
+</td>
+
+
+
+
+
+<td>
+
+
+<strong class="text-success">
+
+
+<?=number_format($b['total_amount'] ?? 0,2)?>
+
+MMK
+
+
+</strong>
+
+
+</td>
+
+
+
+
+
+<td>
+
 
 <span class="badge bg-info">
 
+
 <?=$b['booking_status']?>
+
 
 </span>
 
+
 </td>
+
 
 
 
@@ -1639,39 +2184,51 @@ onchange="this.form.submit()">
 
 
 
-<option>
+<option value="Pending"
 
-<?=$b['booking_status']?>
+<?=$b['booking_status']=="Pending"?'selected':''?>>
 
-</option>
-
-
-<option value="Confirmed">
-
-Confirmed
+Pending
 
 </option>
 
 
-<option value="Checked Out">
 
-Checked Out
+<option value="Confirmed"
+
+<?=$b['booking_status']=="Confirmed"?'selected':''?>>
+
+Confirm
+
+</option>
+
+
+
+<option value="Checked Out"
+
+<?=$b['booking_status']=="Checked Out"?'selected':''?>>
+
+Check Out
 
 </option>
 
 
-<option value="Cancelled">
 
-Cancelled
+<option value="Cancelled"
+
+<?=$b['booking_status']=="Cancelled"?'selected':''?>>
+
+Cancel
 
 </option>
+
 
 
 </select>
 
 
-
 </form>
+
 
 
 </td>
@@ -1684,18 +2241,22 @@ Cancelled
 <?php endwhile; ?>
 
 
+
 <?php else: ?>
 
 
 <tr>
 
-<td colspan="6"
+<td colspan="7"
 
-class="text-center">
+class="text-center text-muted py-4">
 
-No bookings found.
+
+No booking records found.
+
 
 </td>
+
 
 </tr>
 
@@ -1713,6 +2274,42 @@ No bookings found.
 
 
 </div>
+<!-- ===========================
+     DASHBOARD SUMMARY
+=========================== -->
+
+
+<div class="row g-4 mb-4">
+
+
+
+<div class="col-md-4">
+
+
+<div class="card-box text-center">
+
+
+<i class="fa-solid fa-building fa-2x text-primary mb-3"></i>
+
+
+<h6 class="text-muted">
+
+Total Hotels
+
+</h6>
+
+
+<h3 class="fw-bold">
+
+<?=number_format($total_hotels)?>
+
+</h3>
+
+
+</div>
+
+
+</div>
 
 
 
@@ -1720,16 +2317,121 @@ No bookings found.
 
 
 
-<!-- PAGINATION -->
+<div class="col-md-4">
 
 
-<?php if($total_pages>1): ?>
+<div class="card-box text-center">
 
 
-<nav>
+<i class="fa-solid fa-calendar-days fa-2x text-success mb-3"></i>
+
+
+<h6 class="text-muted">
+
+Total Reservations
+
+</h6>
+
+
+<h3 class="fw-bold">
+
+<?=number_format($total_bookings)?>
+
+</h3>
+
+
+</div>
+
+
+</div>
+
+
+
+
+
+
+
+<div class="col-md-4">
+
+
+<div class="card-box text-center">
+
+
+<i class="fa-solid fa-money-bill-wave fa-2x text-warning mb-3"></i>
+
+
+<h6 class="text-muted">
+
+Total Revenue
+
+</h6>
+
+
+<h3 class="fw-bold">
+
+<?=number_format($total_earnings,2)?>
+
+MMK
+
+</h3>
+
+
+</div>
+
+
+</div>
+
+
+
+</div>
+
+
+
+
+
+
+
+
+
+<!-- ===========================
+     PAGINATION
+=========================== -->
+
+
+<?php if($total_pages > 1): ?>
+
+
+<nav class="mt-4">
 
 
 <ul class="pagination justify-content-center">
+
+
+
+
+
+<li class="page-item <?=($page<=1)?'disabled':''?>">
+
+
+<a class="page-link"
+
+href="?page=<?=($page-1)?>&search=<?=urlencode($search)?>&status=<?=urlencode($status_filter)?>">
+
+
+Previous
+
+
+</a>
+
+
+</li>
+
+
+
+
+
+
+
 
 
 <?php for($i=1;$i<=$total_pages;$i++): ?>
@@ -1755,6 +2457,33 @@ href="?page=<?=$i?>&search=<?=urlencode($search)?>&status=<?=urlencode($status_f
 <?php endfor; ?>
 
 
+
+
+
+
+
+
+
+<li class="page-item <?=($page >= $total_pages)?'disabled':''?>">
+
+
+<a class="page-link"
+
+href="?page=<?=($page+1)?>&search=<?=urlencode($search)?>&status=<?=urlencode($status_filter)?>">
+
+
+Next
+
+
+</a>
+
+
+</li>
+
+
+
+
+
 </ul>
 
 
@@ -1769,11 +2498,33 @@ href="?page=<?=$i?>&search=<?=urlencode($search)?>&status=<?=urlencode($status_f
 
 
 
-<footer class="text-center text-muted mt-4">
 
-Hotel Booking System V3 © <?=date('Y')?>
+
+<!-- ===========================
+     FOOTER
+=========================== -->
+
+
+<footer class="text-center text-muted py-4">
+
+
+<small>
+
+
+© <?=date('Y')?> Hotel Booking System V3 |
+
+
+Hotel Partner Management Dashboard
+
+
+</small>
+
 
 </footer>
+
+
+
+
 
 
 
@@ -1786,11 +2537,49 @@ Hotel Booking System V3 © <?=date('Y')?>
 
 
 
+
+
+
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
 
 
-</body>
+<script>
 
+
+/*
+================================
+AUTO HIDE ALERT MESSAGE
+================================
+*/
+
+
+setTimeout(function(){
+
+
+let alerts = document.querySelectorAll('.alert');
+
+
+alerts.forEach(function(alert){
+
+
+alert.style.display='none';
+
+
+});
+
+
+},4000);
+
+
+
+</script>
+
+
+
+
+
+</body>
 
 </html>

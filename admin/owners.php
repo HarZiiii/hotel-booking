@@ -103,7 +103,7 @@ if(
 
 
     $phone =
-    trim($_POST['phone_number'] ?? '');
+    trim($_POST['phone'] ?? '');
 
 
 
@@ -142,11 +142,11 @@ if(
 
     }
 
-    elseif(strlen($password) < 6){
+    elseif(strlen($password) < 8){
 
 
         $error =
-        "Password must be at least 6 characters.";
+        "Password must be at least 8 characters.";
 
 
     }
@@ -219,11 +219,27 @@ if(
 
 
 
-            $hashed_password =
-            password_hash(
-                $password,
-                PASSWORD_BCRYPT
-            );
+            // Owner accounts are admin-created only. Build the required user fields
+            // so this form stays compatible with the users table schema.
+            $name_parts = preg_split('/\s+/', $full_name, 2);
+            $first_name = $name_parts[0] ?? 'Hotel';
+            $last_name = $name_parts[1] ?? 'Owner';
+            $base_username = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '', strstr($email, '@', true) ?: 'hotelowner'));
+            if($base_username === '') $base_username = 'hotelowner';
+            $username = $base_username;
+            $suffix = 1;
+            while(true){
+                $ucheck = mysqli_prepare($conn, "SELECT user_id FROM users WHERE username=? LIMIT 1");
+                mysqli_stmt_bind_param($ucheck, "s", $username);
+                mysqli_stmt_execute($ucheck);
+                if(mysqli_num_rows(mysqli_stmt_get_result($ucheck)) === 0) break;
+                $username = $base_username . (++$suffix);
+            }
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+            $address = 'Not provided';
+            $city = 'Not provided';
+            $country = 'Myanmar';
+            $role = 'owner';
 
 
 
@@ -244,29 +260,9 @@ if(
                 "
 
                 INSERT INTO users
-
-                (
-
-                full_name,
-
-                email,
-
-                phone_number,
-
-                password,
-
-                role,
-
-                status,
-
-                created_at
-
-                )
-
-
+                (username, full_name, first_name, last_name, email, phone, password, role, address, city, country, status, created_at)
                 VALUES
-
-                (?,?,?,?,?,'active',NOW())
+                (?,?,?,?,?,?,?,?,?,?,?,'active',NOW())
 
 
                 "
@@ -275,26 +271,20 @@ if(
 
 
 
-            $role = "owner";
-
-
-
             mysqli_stmt_bind_param(
-
                 $insert_stmt,
-
-                "sssss",
-
+                "sssssssssss",
+                $username,
                 $full_name,
-
+                $first_name,
+                $last_name,
                 $email,
-
                 $phone,
-
                 $hashed_password,
-
-                $role
-
+                $role,
+                $address,
+                $city,
+                $country
             );
 
 
@@ -479,7 +469,7 @@ if(
 
             ?
 
-            "banned"
+            "blocked"
 
             :
 
@@ -756,7 +746,7 @@ if($search !== ''){
 
     OR u.email LIKE ?
 
-    OR u.phone_number LIKE ?
+    OR u.phone LIKE ?
 
     )
 
@@ -1225,6 +1215,8 @@ gap:15px;
 </style>
 
 
+
+<link rel="stylesheet" href="../assets/css/admin-sidebar.css?v=2">
 </head>
 
 
@@ -1240,213 +1232,7 @@ gap:15px;
 <!-- SIDEBAR -->
 
 
-<aside class="sidebar">
-
-
-<div class="brand">
-
-<i class="fa-solid fa-hotel"></i>
-
-HBS V3 Admin
-
-</div>
-
-
-
-<ul class="list-unstyled">
-
-
-<li>
-
-<a href="dashboard.php">
-
-<i class="fa-solid fa-chart-line"></i>
-
-Dashboard
-
-</a>
-
-</li>
-
-
-
-<li>
-
-<a href="manage_commissions.php">
-
-<i class="fa-solid fa-hand-holding-dollar"></i>
-
-Commission
-
-</a>
-
-</li>
-
-
-
-
-<li>
-
-<a href="users.php">
-
-<i class="fa-solid fa-users"></i>
-
-Users
-
-</a>
-
-</li>
-
-
-
-
-
-<li class="active">
-
-<a href="owners.php">
-
-<i class="fa-solid fa-user-tie"></i>
-
-Hotel Owners
-
-</a>
-
-</li>
-
-
-
-
-
-<li>
-
-<a href="hotels.php">
-
-<i class="fa-solid fa-hotel"></i>
-
-Hotels
-
-</a>
-
-</li>
-
-
-
-
-<li>
-
-<a href="rooms.php">
-
-<i class="fa-solid fa-bed"></i>
-
-Rooms
-
-</a>
-
-</li>
-
-
-
-
-<li>
-
-<a href="bookings.php">
-
-<i class="fa-solid fa-calendar-check"></i>
-
-Bookings
-
-</a>
-
-</li>
-
-
-
-
-<li>
-
-<a href="payments.php">
-
-<i class="fa-solid fa-credit-card"></i>
-
-Payments
-
-</a>
-
-</li>
-
-
-
-
-<li>
-
-<a href="reviews.php">
-
-<i class="fa-solid fa-star"></i>
-
-Reviews
-
-</a>
-
-</li>
-
-
-
-
-<li>
-
-<a href="notifications.php">
-
-<i class="fa-solid fa-bell"></i>
-
-Notifications
-
-</a>
-
-</li>
-
-
-
-
-<li>
-
-<a href="audit_logs.php">
-
-<i class="fa-solid fa-clock-rotate-left"></i>
-
-Audit Logs
-
-</a>
-
-</li>
-
-
-
-
-<li>
-
-<a href="../logout.php">
-
-<i class="fa-solid fa-right-from-bracket"></i>
-
-Logout
-
-</a>
-
-</li>
-
-
-</ul>
-
-
-</aside>
-
-
-
-
-
-
-
-
+<?php include __DIR__ . '/../includes/admin_sidebar.php'; ?>
 
 <main class="main-content">
 
@@ -1783,7 +1569,7 @@ Hotel Owner
 
 <i class="fa fa-phone text-success"></i>
 
-<?=htmlspecialchars($owner['phone_number'] ?? '-')?>
+<?=htmlspecialchars($owner['phone'] ?? '-')?>
 
 
 </td>
@@ -1839,7 +1625,7 @@ Active
 
 <span class="badge bg-danger">
 
-Banned
+Blocked
 
 </span>
 
@@ -2146,7 +1932,7 @@ Phone Number
 
 <input type="text"
 
-name="phone_number"
+name="phone"
 
 class="form-control"
 
