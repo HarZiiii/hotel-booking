@@ -9,7 +9,7 @@ require_once '../config/config.php';
 ===========================================
 */
 
-if(session_status() === PHP_SESSION_NONE){
+if (session_status() === PHP_SESSION_NONE) {
 
     session_start();
 
@@ -17,11 +17,11 @@ if(session_status() === PHP_SESSION_NONE){
 
 
 
-if(
+if (
     !isset($_SESSION['user_id']) ||
     !isset($_SESSION['role']) ||
     $_SESSION['role'] !== 'owner'
-){
+) {
 
     header("Location: ../login.php");
     exit();
@@ -50,11 +50,11 @@ $error = "";
 */
 
 
-if(empty($_SESSION['csrf_token'])){
+if (empty($_SESSION['csrf_token'])) {
 
 
     $_SESSION['csrf_token'] =
-    bin2hex(random_bytes(32));
+        bin2hex(random_bytes(32));
 
 
 }
@@ -82,19 +82,19 @@ function insertOwnerAudit(
     $table_name,
     $record_id
 
-){
+) {
 
 
     $ip =
-    $_SERVER['REMOTE_ADDR']
-    ??
-    '127.0.0.1';
+        $_SERVER['REMOTE_ADDR']
+        ??
+        '127.0.0.1';
 
 
     $agent =
-    $_SERVER['HTTP_USER_AGENT']
-    ??
-    'Unknown';
+        $_SERVER['HTTP_USER_AGENT']
+        ??
+        'Unknown';
 
 
 
@@ -169,15 +169,15 @@ function insertOwnerAudit(
 */
 
 
-if(
-    $_SERVER['REQUEST_METHOD']==='POST'
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
     &&
     isset($_POST['update_booking_status'])
-){
+) {
 
 
 
-    if(
+    if (
         !isset($_POST['csrf_token'])
         ||
         !hash_equals(
@@ -187,7 +187,7 @@ if(
             $_POST['csrf_token']
 
         )
-    ){
+    ) {
 
         die("Invalid CSRF Token");
 
@@ -200,21 +200,21 @@ if(
 
     $booking_id =
 
-    intval(
+        intval(
 
-        $_POST['booking_id'] ?? 0
+            $_POST['booking_id'] ?? 0
 
-    );
+        );
 
 
 
     $new_status =
 
-    trim(
+        trim(
 
-        $_POST['status_value'] ?? ''
+            $_POST['status_value'] ?? ''
 
-    );
+        );
 
 
 
@@ -235,7 +235,7 @@ if(
 
 
 
-    if(
+    if (
 
         $booking_id > 0
 
@@ -249,7 +249,7 @@ if(
 
         )
 
-    ){
+    ) {
 
 
 
@@ -324,30 +324,30 @@ if(
 
         $booking_result =
 
-        mysqli_stmt_get_result(
+            mysqli_stmt_get_result(
 
-            $check_stmt
+                $check_stmt
 
-        );
+            );
 
 
 
         $booking =
 
-        mysqli_fetch_assoc(
+            mysqli_fetch_assoc(
 
-            $booking_result
+                $booking_result
 
-        );
-
-
+            );
 
 
 
 
 
 
-        if($booking){
+
+
+        if ($booking) {
 
 
 
@@ -411,38 +411,38 @@ if(
             */
 
 
-            if(!empty($booking['customer_id'])){
+            if (!empty($booking['customer_id'])) {
 
 
                 $title =
 
-                "Reservation Status Update";
+                    "Reservation Status Update";
 
 
 
                 $message =
 
-                "Your booking "
+                    "Your booking "
 
-                .
+                    .
 
-                $booking['booking_code']
+                    $booking['booking_code']
 
-                .
+                    .
 
-                " at "
+                    " at "
 
-                .
+                    .
 
-                $booking['hotel_name']
+                    $booking['hotel_name']
 
-                .
+                    .
 
-                " is now "
+                    " is now "
 
-                .
+                    .
 
-                strtoupper($new_status);
+                    strtoupper($new_status);
 
 
 
@@ -561,14 +561,12 @@ if(
 
 
 
-        }
-
-        else{
+        } else {
 
 
             $error =
 
-            "Unauthorized booking action.";
+                "Unauthorized booking action.";
 
         }
 
@@ -601,7 +599,7 @@ function getOwnerCount(
 
     $owner_id
 
-){
+) {
 
 
     $stmt = mysqli_prepare(
@@ -632,13 +630,13 @@ function getOwnerCount(
 
     $result =
 
-    mysqli_stmt_get_result($stmt);
+        mysqli_stmt_get_result($stmt);
 
 
 
     $data =
 
-    mysqli_fetch_assoc($result);
+        mysqli_fetch_assoc($result);
 
 
 
@@ -787,21 +785,21 @@ mysqli_stmt_execute(
 
 $earnings_result =
 
-mysqli_stmt_get_result(
+    mysqli_stmt_get_result(
 
-    $earnings_stmt
+        $earnings_stmt
 
-);
+    );
 
 
 
 $total_earnings =
 
-mysqli_fetch_assoc(
+    mysqli_fetch_assoc(
 
-    $earnings_result
+        $earnings_result
 
-)['total'] ?? 0;
+    )['total'] ?? 0;
 
 
 
@@ -820,21 +818,21 @@ mysqli_fetch_assoc(
 
 $search =
 
-trim(
+    trim(
 
-    $_GET['search'] ?? ''
+        $_GET['search'] ?? ''
 
-);
+    );
 
 
 
 $status_filter =
 
-trim(
+    trim(
 
-    $_GET['status'] ?? ''
+        $_GET['status'] ?? ''
 
-);
+    );
 
 
 
@@ -857,7 +855,7 @@ $params[] = $owner_id;
 
 
 
-if($search !== ''){
+if ($search !== '') {
 
 
     $where[] = "
@@ -876,19 +874,19 @@ if($search !== ''){
 
 
 
-    $keyword = "%".$search."%";
+    $keyword = "%" . $search . "%";
 
 
 
-    $params[]=$keyword;
+    $params[] = $keyword;
 
-    $params[]=$keyword;
+    $params[] = $keyword;
 
-    $params[]=$keyword;
+    $params[] = $keyword;
 
 
 
-    $types.="sss";
+    $types .= "sss";
 
 
 }
@@ -899,19 +897,19 @@ if($search !== ''){
 
 
 
-if($status_filter !== ''){
+if ($status_filter !== '') {
 
 
     $where[] =
 
-    "b.booking_status=?";
+        "b.booking_status=?";
 
 
 
-    $params[]=$status_filter;
+    $params[] = $status_filter;
 
 
-    $types.="s";
+    $types .= "s";
 
 
 }
@@ -927,18 +925,18 @@ $where_sql = "";
 
 
 
-if(count($where)>0){
+if (count($where) > 0) {
 
 
     $where_sql =
 
-    " AND ".implode(
+        " AND " . implode(
 
-        " AND ",
+            " AND ",
 
-        $where
+            $where
 
-    );
+        );
 
 
 }
@@ -963,17 +961,17 @@ $limit = 20;
 
 $page =
 
-intval(
+    intval(
 
-    $_GET['page'] ?? 1
+        $_GET['page'] ?? 1
 
-);
+    );
 
 
 
-if($page < 1){
+if ($page < 1) {
 
-    $page=1;
+    $page = 1;
 
 }
 
@@ -981,7 +979,7 @@ if($page < 1){
 
 $offset =
 
-($page-1)*$limit;
+    ($page - 1) * $limit;
 
 
 
@@ -1000,7 +998,7 @@ $offset =
 
 $sql =
 
-"
+    "
 
 SELECT
 
@@ -1057,12 +1055,12 @@ $stmt = mysqli_prepare(
 
 
 
-$params[]=$limit;
+$params[] = $limit;
 
-$params[]=$offset;
+$params[] = $offset;
 
 
-$types.="ii";
+$types .= "ii";
 
 
 
@@ -1084,7 +1082,7 @@ mysqli_stmt_execute($stmt);
 
 $bookings_result =
 
-mysqli_stmt_get_result($stmt);
+    mysqli_stmt_get_result($stmt);
 
 
 
@@ -1104,9 +1102,9 @@ $total_notifications = 0;
 
 $noti_result = mysqli_query(
 
-$conn,
+    $conn,
 
-"
+    "
 
 SELECT COUNT(*) total
 
@@ -1122,16 +1120,16 @@ AND is_read=0
 
 
 
-if($noti_result){
+if ($noti_result) {
 
 
-$total_notifications =
+    $total_notifications =
 
-mysqli_fetch_assoc(
+        mysqli_fetch_assoc(
 
-    $noti_result
+            $noti_result
 
-)['total'] ?? 0;
+        )['total'] ?? 0;
 
 
 }
@@ -1144,291 +1142,287 @@ mysqli_fetch_assoc(
 
 <head>
 
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
 
-<title>Owner Dashboard | Hotel Partner Hub</title>
+    <title>Owner Dashboard | Hotel Partner Hub</title>
 
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
 
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 
 
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
 
 
-<style>
+    <style>
+        body {
 
+            font-family: 'Poppins', sans-serif;
 
-body{
+            background: #f4f6f9;
 
-font-family:'Poppins',sans-serif;
+            color: #333;
 
-background:#f4f6f9;
+        }
 
-color:#333;
 
-}
 
+        .wrapper {
 
+            display: flex;
 
-.wrapper{
+            min-height: 100vh;
 
-display:flex;
+        }
 
-min-height:100vh;
 
-}
 
 
+        .sidebar {
 
+            width: 260px;
 
-.sidebar{
+            background: #0f172a;
 
-width:260px;
+            color: white;
 
-background:#0f172a;
+            position: fixed;
 
-color:white;
+            top: 0;
 
-position:fixed;
+            bottom: 0;
 
-top:0;
+            left: 0;
 
-bottom:0;
+            overflow-y: auto;
 
-left:0;
+        }
 
-overflow-y:auto;
 
-}
 
+        .brand {
 
+            padding: 20px;
 
-.brand{
+            font-size: 19px;
 
-padding:20px;
+            font-weight: 700;
 
-font-size:19px;
+            color: #38bdf8;
 
-font-weight:700;
+            border-bottom: 1px solid #1e293b;
 
-color:#38bdf8;
+            display: flex;
 
-border-bottom:1px solid #1e293b;
+            align-items: center;
 
-display:flex;
+            gap: 10px;
 
-align-items:center;
+        }
 
-gap:10px;
 
-}
 
+        .sidebar ul {
 
+            list-style: none;
 
-.sidebar ul{
+            padding: 10px 0;
 
-list-style:none;
+            margin: 0;
 
-padding:10px 0;
+        }
 
-margin:0;
 
-}
 
+        .sidebar ul li a {
 
+            display: flex;
 
-.sidebar ul li a{
+            align-items: center;
 
-display:flex;
+            gap: 12px;
 
-align-items:center;
+            padding: 12px 20px;
 
-gap:12px;
+            color: #94a3b8;
 
-padding:12px 20px;
+            text-decoration: none;
 
-color:#94a3b8;
+            font-size: 14px;
 
-text-decoration:none;
+        }
 
-font-size:14px;
 
-}
 
+        .sidebar ul li a:hover,
+        .sidebar ul li.active a {
 
+            background: #1e293b;
 
-.sidebar ul li a:hover,
-.sidebar ul li.active a{
+            color: #38bdf8;
 
-background:#1e293b;
+            border-left: 4px solid #38bdf8;
 
-color:#38bdf8;
+        }
 
-border-left:4px solid #38bdf8;
 
-}
 
 
 
+        .main-content {
 
+            margin-left: 260px;
 
-.main-content{
+            width: calc(100% - 260px);
 
-margin-left:260px;
+            padding: 25px 30px;
 
-width:calc(100% - 260px);
+        }
 
-padding:25px 30px;
 
-}
 
 
 
+        .topbar {
 
+            background: white;
 
-.topbar{
+            padding: 18px 25px;
 
-background:white;
+            border-radius: 12px;
 
-padding:18px 25px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, .05);
 
-border-radius:12px;
+            display: flex;
 
-box-shadow:0 2px 12px rgba(0,0,0,.05);
+            justify-content: space-between;
 
-display:flex;
+            align-items: center;
 
-justify-content:space-between;
+            margin-bottom: 25px;
 
-align-items:center;
+        }
 
-margin-bottom:25px;
 
-}
 
 
+        .card-box {
 
+            background: white;
 
-.card-box{
+            padding: 22px;
 
-background:white;
+            border-radius: 12px;
 
-padding:22px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, .03);
 
-border-radius:12px;
+            margin-bottom: 25px;
 
-box-shadow:0 2px 10px rgba(0,0,0,.03);
+            border: 1px solid #eef2f6;
 
-margin-bottom:25px;
+        }
 
-border:1px solid #eef2f6;
 
-}
 
 
+        .stat-card {
 
+            border-radius: 14px;
 
-.stat-card{
+            padding: 22px;
 
-border-radius:14px;
+            background: white;
 
-padding:22px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, .04);
 
-background:white;
+            height: 100%;
 
-box-shadow:0 3px 10px rgba(0,0,0,.04);
+        }
 
-height:100%;
 
-}
 
+        .stat-icon {
 
+            width: 50px;
 
-.stat-icon{
+            height: 50px;
 
-width:50px;
+            border-radius: 50%;
 
-height:50px;
+            display: flex;
 
-border-radius:50%;
+            align-items: center;
 
-display:flex;
+            justify-content: center;
 
-align-items:center;
+            font-size: 22px;
 
-justify-content:center;
+        }
 
-font-size:22px;
 
-}
 
 
 
+        .table td {
 
+            vertical-align: middle;
 
-.table td{
+        }
 
-vertical-align:middle;
 
-}
 
 
+        @media(max-width:768px) {
 
 
-@media(max-width:768px){
+            .sidebar {
 
+                position: relative;
 
-.sidebar{
+                width: 100%;
 
-position:relative;
+            }
 
-width:100%;
 
-}
 
+            .wrapper {
 
+                display: block;
 
-.wrapper{
+            }
 
-display:block;
 
-}
 
+            .main-content {
 
+                margin-left: 0;
 
-.main-content{
+                width: 100%;
 
-margin-left:0;
+                padding: 15px;
 
-width:100%;
+            }
 
-padding:15px;
 
-}
 
+            .topbar {
 
+                flex-direction: column;
 
-.topbar{
+                gap: 15px;
 
-flex-direction:column;
+            }
 
-gap:15px;
 
-}
 
-
-
-}
-
-
-
-</style>
-<link href="../assets/css/owner.css" rel="stylesheet">
+        }
+    </style>
+    <link href="../assets/css/owner.css" rel="stylesheet">
 
 </head>
 
@@ -1438,13 +1432,13 @@ gap:15px;
 
 
 
-<div class="wrapper">
+    <div class="wrapper">
 
 
 
 
 
-<?php include '../includes/owner_sidebar.php'; ?>
+        <?php include '../includes/owner_sidebar.php'; ?>
 
 
 
@@ -1455,7 +1449,7 @@ gap:15px;
 
 
 
-<main class="main-content">
+        <main class="main-content">
 
 
 
@@ -1463,35 +1457,35 @@ gap:15px;
 
 
 
-<!-- TOP BAR -->
+            <!-- TOP BAR -->
 
-<header class="topbar">
+            <header class="topbar">
 
 
-<div>
+                <div>
 
 
-<h4 class="fw-bold mb-1">
+                    <h4 class="fw-bold mb-1">
 
 
-<i class="fa-solid fa-chart-line text-primary me-2"></i>
+                        <i class="fa-solid fa-chart-line text-primary me-2"></i>
 
 
-Owner Dashboard
+                        Owner Dashboard
 
 
-</h4>
+                    </h4>
 
 
-<small class="text-muted">
+                    <small class="text-muted">
 
-Monitor hotels, bookings and revenue performance
+                        Monitor hotels, bookings and revenue performance
 
 
-</small>
+                    </small>
 
 
-</div>
+                </div>
 
 
 
@@ -1499,44 +1493,43 @@ Monitor hotels, bookings and revenue performance
 
 
 
-<div>
+                <div>
 
 
-<a href="notifications.php"
+                    <a href="notifications.php" class="btn btn-light position-relative rounded-circle">
 
-class="btn btn-light position-relative rounded-circle">
 
+                        <i class="fa-solid fa-bell"></i>
 
-<i class="fa-solid fa-bell"></i>
 
 
 
 
+                        <?php if ($total_notifications > 0): ?>
 
-<?php if($total_notifications>0): ?>
 
+                            <span class="badge bg-danger position-absolute top-0 start-100 translate-middle">
 
-<span class="badge bg-danger position-absolute top-0 start-100 translate-middle">
 
+                                <?= $total_notifications ?>
 
-<?=$total_notifications?>
 
+                            </span>
 
-</span>
 
+                        <?php endif; ?>
 
-<?php endif; ?>
 
 
+                    </a>
 
-</a>
 
+                </div>
 
-</div>
 
 
+            </header>
 
-</header>
 
 
 
@@ -1545,45 +1538,45 @@ class="btn btn-light position-relative rounded-circle">
 
 
 
+            <?php if (isset($_GET['msg']) && $_GET['msg'] == "updated"): ?>
 
-<?php if(isset($_GET['msg']) && $_GET['msg']=="updated"): ?>
 
+                <div class="alert alert-success">
 
-<div class="alert alert-success">
 
+                    <i class="fa-solid fa-circle-check"></i>
 
-<i class="fa-solid fa-circle-check"></i>
 
+                    Booking status updated successfully.
 
-Booking status updated successfully.
 
+                </div>
 
-</div>
 
+            <?php endif; ?>
 
-<?php endif; ?>
 
 
 
 
 
+            <?php if (!empty($error)): ?>
 
-<?php if(!empty($error)): ?>
 
+                <div class="alert alert-danger">
 
-<div class="alert alert-danger">
 
+                    <i class="fa-solid fa-triangle-exclamation"></i>
 
-<i class="fa-solid fa-triangle-exclamation"></i>
 
+                    <?= htmlspecialchars($error) ?>
 
-<?=htmlspecialchars($error)?>
 
+                </div>
 
-</div>
 
+            <?php endif; ?>
 
-<?php endif; ?>
 
 
 
@@ -1592,61 +1585,61 @@ Booking status updated successfully.
 
 
 
+            <!-- STATISTICS CARDS -->
 
-<!-- STATISTICS CARDS -->
 
+            <div class="row g-4 mb-4">
 
-<div class="row g-4 mb-4">
 
 
 
 
+                <div class="col-md-3">
 
-<div class="col-md-3">
 
+                    <div class="stat-card">
 
-<div class="stat-card">
 
+                        <div class="d-flex align-items-center gap-3">
 
-<div class="d-flex align-items-center gap-3">
 
+                            <div class="stat-icon bg-primary-subtle text-primary">
 
-<div class="stat-icon bg-primary-subtle text-primary">
 
+                                <i class="fa-solid fa-hotel"></i>
 
-<i class="fa-solid fa-hotel"></i>
 
+                            </div>
 
-</div>
 
+                            <div>
 
-<div>
 
+                                <h6 class="text-muted mb-1">
 
-<h6 class="text-muted mb-1">
+                                    Hotels
 
-Hotels
+                                </h6>
 
-</h6>
 
+                                <h3 class="fw-bold mb-0">
 
-<h3 class="fw-bold mb-0">
+                                    <?= $total_hotels ?>
 
-<?=$total_hotels?>
+                                </h3>
 
-</h3>
 
+                            </div>
 
-</div>
 
+                        </div>
 
-</div>
 
+                    </div>
 
-</div>
 
+                </div>
 
-</div>
 
 
 
@@ -1655,52 +1648,52 @@ Hotels
 
 
 
+                <div class="col-md-3">
 
-<div class="col-md-3">
 
+                    <div class="stat-card">
 
-<div class="stat-card">
 
+                        <div class="d-flex align-items-center gap-3">
 
-<div class="d-flex align-items-center gap-3">
 
+                            <div class="stat-icon bg-success-subtle text-success">
 
-<div class="stat-icon bg-success-subtle text-success">
 
+                                <i class="fa-solid fa-calendar-check"></i>
 
-<i class="fa-solid fa-calendar-check"></i>
 
+                            </div>
 
-</div>
 
+                            <div>
 
-<div>
 
+                                <h6 class="text-muted mb-1">
 
-<h6 class="text-muted mb-1">
+                                    Bookings
 
-Bookings
+                                </h6>
 
-</h6>
 
+                                <h3 class="fw-bold mb-0">
 
-<h3 class="fw-bold mb-0">
+                                    <?= $total_bookings ?>
 
-<?=$total_bookings?>
+                                </h3>
 
-</h3>
 
+                            </div>
 
-</div>
 
+                        </div>
 
-</div>
 
+                    </div>
 
-</div>
 
+                </div>
 
-</div>
 
 
 
@@ -1709,52 +1702,52 @@ Bookings
 
 
 
+                <div class="col-md-3">
 
-<div class="col-md-3">
 
+                    <div class="stat-card">
 
-<div class="stat-card">
 
+                        <div class="d-flex align-items-center gap-3">
 
-<div class="d-flex align-items-center gap-3">
 
+                            <div class="stat-icon bg-warning-subtle text-warning">
 
-<div class="stat-icon bg-warning-subtle text-warning">
 
+                                <i class="fa-solid fa-user-check"></i>
 
-<i class="fa-solid fa-user-check"></i>
 
+                            </div>
 
-</div>
 
+                            <div>
 
-<div>
 
+                                <h6 class="text-muted mb-1">
 
-<h6 class="text-muted mb-1">
+                                    Active Guests
 
-Active Guests
+                                </h6>
 
-</h6>
 
+                                <h3 class="fw-bold mb-0">
 
-<h3 class="fw-bold mb-0">
+                                    <?= $active_guests ?>
 
-<?=$active_guests?>
+                                </h3>
 
-</h3>
 
+                            </div>
 
-</div>
 
+                        </div>
 
-</div>
 
+                    </div>
 
-</div>
 
+                </div>
 
-</div>
 
 
 
@@ -1763,58 +1756,58 @@ Active Guests
 
 
 
+                <div class="col-md-3">
 
-<div class="col-md-3">
 
+                    <div class="stat-card">
 
-<div class="stat-card">
 
+                        <div class="d-flex align-items-center gap-3">
 
-<div class="d-flex align-items-center gap-3">
 
+                            <div class="stat-icon bg-info-subtle text-info">
 
-<div class="stat-icon bg-info-subtle text-info">
 
+                                <i class="fa-solid fa-wallet"></i>
 
-<i class="fa-solid fa-wallet"></i>
 
+                            </div>
 
-</div>
 
+                            <div>
 
-<div>
 
+                                <h6 class="text-muted mb-1">
 
-<h6 class="text-muted mb-1">
+                                    Revenue
 
-Revenue
+                                </h6>
 
-</h6>
 
+                                <h3 class="fw-bold mb-0">
 
-<h3 class="fw-bold mb-0">
 
+                                    <?= number_format($total_earnings, 2) ?>
 
-<?=number_format($total_earnings,2)?>
+                                </h3>
 
-</h3>
 
+                            </div>
 
-</div>
 
+                        </div>
 
-</div>
 
+                    </div>
 
-</div>
 
+                </div>
 
-</div>
 
 
 
+            </div>
 
-</div>
 
 
 
@@ -1823,493 +1816,451 @@ Revenue
 
 
 
+            <!-- SEARCH FILTER -->
 
-<!-- SEARCH FILTER -->
 
+            <div class="card-box">
 
-<div class="card-box">
 
+                <form method="GET" class="row g-3">
 
-<form method="GET"
 
-class="row g-3">
 
 
 
+                    <div class="col-md-6">
 
 
-<div class="col-md-6">
+                        <input type="text" name="search" class="form-control"
+                            placeholder="Search booking code, hotel, customer..."
+                            value="<?= htmlspecialchars($search) ?>">
 
 
-<input type="text"
+                    </div>
 
-name="search"
 
-class="form-control"
 
-placeholder="Search booking code, hotel, customer..."
 
-value="<?=htmlspecialchars($search)?>">
 
 
-</div>
 
+                    <div class="col-md-3">
 
 
+                        <select name="status" class="form-select">
 
 
+                            <option value="">
 
+                                All Status
 
-<div class="col-md-3">
+                            </option>
 
 
-<select name="status"
 
-class="form-select">
+                            <option value="Pending" <?= $status_filter == "Pending" ? 'selected' : '' ?>>
 
+                                Pending
 
-<option value="">
+                            </option>
 
-All Status
 
-</option>
 
 
+                            <option value="Confirmed" <?= $status_filter == "Confirmed" ? 'selected' : '' ?>>
 
-<option value="Pending"
+                                Confirmed
 
-<?=$status_filter=="Pending"?'selected':''?>>
+                            </option>
 
-Pending
 
-</option>
 
 
+                            <option value="Checked Out" <?= $status_filter == "Checked Out" ? 'selected' : '' ?>>
 
+                                Checked Out
 
-<option value="Confirmed"
+                            </option>
 
-<?=$status_filter=="Confirmed"?'selected':''?>>
 
-Confirmed
 
-</option>
 
+                            <option value="Cancelled" <?= $status_filter == "Cancelled" ? 'selected' : '' ?>>
 
+                                Cancelled
 
+                            </option>
 
-<option value="Checked Out"
 
-<?=$status_filter=="Checked Out"?'selected':''?>>
 
-Checked Out
+                        </select>
 
-</option>
 
+                    </div>
 
 
 
-<option value="Cancelled"
 
-<?=$status_filter=="Cancelled"?'selected':''?>>
 
-Cancelled
 
-</option>
 
 
+                    <div class="col-md-3">
 
-</select>
 
+                        <button class="btn btn-primary w-100">
 
-</div>
 
+                            <i class="fa-solid fa-filter"></i>
 
+                            Filter
 
 
+                        </button>
 
 
+                    </div>
 
 
-<div class="col-md-3">
 
+                </form>
 
-<button class="btn btn-primary w-100">
 
+            </div>
 
-<i class="fa-solid fa-filter"></i>
 
-Filter
 
 
-</button>
 
 
-</div>
 
 
 
-</form>
+            <!-- BOOKINGS TABLE -->
 
 
-</div>
+            <div class="card-box">
 
 
+                <h5 class="fw-bold mb-3">
 
 
+                    <i class="fa-solid fa-list text-primary"></i>
 
 
+                    Recent Bookings
 
 
+                </h5>
 
-<!-- BOOKINGS TABLE -->
 
 
-<div class="card-box">
 
 
-<h5 class="fw-bold mb-3">
 
 
-<i class="fa-solid fa-list text-primary"></i>
+                <div class="table-responsive">
 
 
-Recent Bookings
+                    <table class="table table-hover align-middle">
 
 
-</h5>
+                        <thead class="table-light">
 
 
+                            <tr>
 
 
+                                <th>Code</th>
 
+                                <th>Hotel</th>
 
+                                <th>Customer</th>
 
-<div class="table-responsive">
+                                <th>Date</th>
 
+                                <th>Amount</th>
 
-<table class="table table-hover align-middle">
+                                <th>Status</th>
 
+                                <th>Action</th>
 
-<thead class="table-light">
 
+                            </tr>
 
-<tr>
 
+                        </thead>
 
-<th>Code</th>
 
-<th>Hotel</th>
 
-<th>Customer</th>
 
-<th>Date</th>
 
-<th>Amount</th>
+                        <tbody>
 
-<th>Status</th>
 
-<th>Action</th>
+                            <?php if ($bookings_result && mysqli_num_rows($bookings_result) > 0): ?>
 
 
-</tr>
 
+                                <?php while ($b = mysqli_fetch_assoc($bookings_result)): ?>
 
-</thead>
 
 
+                                    <tr>
 
 
+                                        <td>
 
-<tbody>
 
+                                            <strong class="text-primary">
 
-<?php if($bookings_result && mysqli_num_rows($bookings_result)>0): ?>
+                                                <?= htmlspecialchars($b['booking_code']) ?>
 
+                                            </strong>
 
 
-<?php while($b=mysqli_fetch_assoc($bookings_result)): ?>
+                                        </td>
 
 
 
-<tr>
 
+                                        <td>
 
-<td>
 
+                                            <?= htmlspecialchars($b['hotel_name'] ?? '-') ?>
 
-<strong class="text-primary">
+                                        </td>
 
-<?=htmlspecialchars($b['booking_code'])?>
 
-</strong>
 
 
-</td>
+                                        <td>
 
 
+                                            <?= htmlspecialchars($b['customer_name'] ?? '-') ?>
 
 
-<td>
+                                            <br>
 
 
-<?=htmlspecialchars($b['hotel_name'] ?? '-')?>
+                                            <small class="text-muted">
 
-</td>
+                                                <?= htmlspecialchars($b['customer_email'] ?? '-') ?>
 
+                                            </small>
 
 
+                                        </td>
 
-<td>
 
 
-<?=htmlspecialchars($b['customer_name'] ?? '-')?>
 
 
-<br>
+                                        <td>
 
 
-<small class="text-muted">
+                                            <?=
 
-<?=htmlspecialchars($b['customer_email'] ?? '-')?>
+                                                !empty($b['check_in'])
 
-</small>
+                                                ?
 
+                                                date("d M Y", strtotime($b['check_in']))
 
-</td>
+                                                :
 
+                                                "N/A"
 
+                                                ?>
 
 
+                                        </td>
 
-<td>
 
 
-<?=
 
-!empty($b['check_in'])
 
-?
+                                        <td>
 
-date("d M Y",strtotime($b['check_in']))
 
-:
+                                            <strong class="text-success">
 
-"N/A"
 
-?>
+                                                <?= number_format($b['total_amount'] ?? 0, 2) ?>
 
+                                                MMK
 
-</td>
 
+                                            </strong>
 
 
+                                        </td>
 
 
-<td>
 
 
-<strong class="text-success">
 
+                                        <td>
 
-<?=number_format($b['total_amount'] ?? 0,2)?>
 
-MMK
+                                            <span class="badge bg-info">
 
 
-</strong>
+                                                <?= $b['booking_status'] ?>
 
 
-</td>
+                                            </span>
 
 
+                                        </td>
 
 
 
-<td>
 
 
-<span class="badge bg-info">
+                                        <td>
 
 
-<?=$b['booking_status']?>
 
+                                            <form method="POST">
 
-</span>
 
+                                                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
 
-</td>
 
+                                                <input type="hidden" name="booking_id" value="<?= $b['booking_id'] ?>">
 
 
 
+                                                <input type="hidden" name="update_booking_status" value="1">
 
-<td>
 
 
 
-<form method="POST">
 
+                                                <select name="status_value" class="form-select form-select-sm"
+                                                    onchange="this.form.submit()">
 
-<input type="hidden"
 
-name="csrf_token"
 
-value="<?=$_SESSION['csrf_token']?>">
+                                                    <option value="Pending" <?= $b['booking_status'] == "Pending" ? 'selected' : '' ?>>
 
+                                                        Pending
 
-<input type="hidden"
+                                                    </option>
 
-name="booking_id"
 
-value="<?=$b['booking_id']?>">
 
+                                                    <option value="Confirmed"
+                                                        <?= $b['booking_status'] == "Confirmed" ? 'selected' : '' ?>>
 
+                                                        Confirm
 
-<input type="hidden"
+                                                    </option>
 
-name="update_booking_status"
 
-value="1">
 
+                                                    <option value="Checked Out" <?= $b['booking_status'] == "Checked Out" ? 'selected' : '' ?>>
 
+                                                        Check Out
 
+                                                    </option>
 
 
-<select name="status_value"
 
-class="form-select form-select-sm"
+                                                    <option value="Cancelled"
+                                                        <?= $b['booking_status'] == "Cancelled" ? 'selected' : '' ?>>
 
-onchange="this.form.submit()">
+                                                        Cancel
 
+                                                    </option>
 
 
-<option value="Pending"
 
-<?=$b['booking_status']=="Pending"?'selected':''?>>
+                                                </select>
 
-Pending
 
-</option>
+                                            </form>
 
 
 
-<option value="Confirmed"
+                                        </td>
 
-<?=$b['booking_status']=="Confirmed"?'selected':''?>>
 
-Confirm
+                                    </tr>
 
-</option>
 
 
+                                <?php endwhile; ?>
 
-<option value="Checked Out"
 
-<?=$b['booking_status']=="Checked Out"?'selected':''?>>
 
-Check Out
+                            <?php else: ?>
 
-</option>
 
+                                <tr>
 
+                                    <td colspan="7" class="text-center text-muted py-4">
 
-<option value="Cancelled"
 
-<?=$b['booking_status']=="Cancelled"?'selected':''?>>
+                                        No booking records found.
 
-Cancel
 
-</option>
+                                    </td>
 
 
+                                </tr>
 
-</select>
 
+                            <?php endif; ?>
 
-</form>
 
+                        </tbody>
 
 
-</td>
+                    </table>
 
 
-</tr>
+                </div>
 
 
-
-<?php endwhile; ?>
-
-
-
-<?php else: ?>
-
-
-<tr>
-
-<td colspan="7"
-
-class="text-center text-muted py-4">
-
-
-No booking records found.
-
-
-</td>
-
-
-</tr>
-
-
-<?php endif; ?>
-
-
-</tbody>
-
-
-</table>
-
-
-</div>
-
-
-</div>
-<!-- ===========================
+            </div>
+            <!-- ===========================
      DASHBOARD SUMMARY
 =========================== -->
 
 
-<div class="row g-4 mb-4">
+            <div class="row g-4 mb-4">
 
 
 
-<div class="col-md-4">
+                <div class="col-md-4">
 
 
-<div class="card-box text-center">
+                    <div class="card-box text-center">
 
 
-<i class="fa-solid fa-building fa-2x text-primary mb-3"></i>
+                        <i class="fa-solid fa-building fa-2x text-primary mb-3"></i>
 
 
-<h6 class="text-muted">
+                        <h6 class="text-muted">
 
-Total Hotels
+                            Total Hotels
 
-</h6>
+                        </h6>
 
 
-<h3 class="fw-bold">
+                        <h3 class="fw-bold">
 
-<?=number_format($total_hotels)?>
+                            <?= number_format($total_hotels) ?>
 
-</h3>
+                        </h3>
 
 
-</div>
+                    </div>
 
 
-</div>
+                </div>
 
 
 
@@ -2317,33 +2268,33 @@ Total Hotels
 
 
 
-<div class="col-md-4">
+                <div class="col-md-4">
 
 
-<div class="card-box text-center">
+                    <div class="card-box text-center">
 
 
-<i class="fa-solid fa-calendar-days fa-2x text-success mb-3"></i>
+                        <i class="fa-solid fa-calendar-days fa-2x text-success mb-3"></i>
 
 
-<h6 class="text-muted">
+                        <h6 class="text-muted">
 
-Total Reservations
+                            Total Reservations
 
-</h6>
+                        </h6>
 
 
-<h3 class="fw-bold">
+                        <h3 class="fw-bold">
 
-<?=number_format($total_bookings)?>
+                            <?= number_format($total_bookings) ?>
 
-</h3>
+                        </h3>
 
 
-</div>
+                    </div>
 
 
-</div>
+                </div>
 
 
 
@@ -2351,39 +2302,39 @@ Total Reservations
 
 
 
-<div class="col-md-4">
+                <div class="col-md-4">
 
 
-<div class="card-box text-center">
+                    <div class="card-box text-center">
 
 
-<i class="fa-solid fa-money-bill-wave fa-2x text-warning mb-3"></i>
+                        <i class="fa-solid fa-money-bill-wave fa-2x text-warning mb-3"></i>
 
 
-<h6 class="text-muted">
+                        <h6 class="text-muted">
 
-Total Revenue
+                            Total Revenue
 
-</h6>
+                        </h6>
 
 
-<h3 class="fw-bold">
+                        <h3 class="fw-bold">
 
-<?=number_format($total_earnings,2)?>
+                            <?= number_format($total_earnings, 2) ?>
 
-MMK
+                            MMK
 
-</h3>
+                        </h3>
 
 
-</div>
+                    </div>
 
 
-</div>
+                </div>
 
 
 
-</div>
+            </div>
 
 
 
@@ -2393,38 +2344,38 @@ MMK
 
 
 
-<!-- ===========================
+            <!-- ===========================
      PAGINATION
 =========================== -->
 
 
-<?php if($total_pages > 1): ?>
+            <?php if ($total_pages > 1): ?>
 
 
-<nav class="mt-4">
+                <nav class="mt-4">
 
 
-<ul class="pagination justify-content-center">
+                    <ul class="pagination justify-content-center">
 
 
 
 
 
-<li class="page-item <?=($page<=1)?'disabled':''?>">
+                        <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
 
 
-<a class="page-link"
+                            <a class="page-link"
+                                href="?page=<?= ($page - 1) ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status_filter) ?>">
 
-href="?page=<?=($page-1)?>&search=<?=urlencode($search)?>&status=<?=urlencode($status_filter)?>">
 
+                                Previous
 
-Previous
 
+                            </a>
 
-</a>
 
+                        </li>
 
-</li>
 
 
 
@@ -2433,28 +2384,28 @@ Previous
 
 
 
+                        <?php for ($i = 1; $i <= $total_pages; $i++): ?>
 
-<?php for($i=1;$i<=$total_pages;$i++): ?>
 
+                            <li class="page-item <?= ($page == $i) ? 'active' : '' ?>">
 
-<li class="page-item <?=($page==$i)?'active':''?>">
 
+                                <a class="page-link"
+                                    href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status_filter) ?>">
 
-<a class="page-link"
 
-href="?page=<?=$i?>&search=<?=urlencode($search)?>&status=<?=urlencode($status_filter)?>">
+                                    <?= $i ?>
 
 
-<?=$i?>
+                                </a>
 
 
-</a>
+                            </li>
 
 
-</li>
+                        <?php endfor; ?>
 
 
-<?php endfor; ?>
 
 
 
@@ -2462,76 +2413,62 @@ href="?page=<?=$i?>&search=<?=urlencode($search)?>&status=<?=urlencode($status_f
 
 
 
+                        <li class="page-item <?= ($page >= $total_pages) ? 'disabled' : '' ?>">
 
 
-<li class="page-item <?=($page >= $total_pages)?'disabled':''?>">
+                            <a class="page-link"
+                                href="?page=<?= ($page + 1) ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status_filter) ?>">
 
 
-<a class="page-link"
+                                Next
 
-href="?page=<?=($page+1)?>&search=<?=urlencode($search)?>&status=<?=urlencode($status_filter)?>">
 
+                            </a>
 
-Next
 
+                        </li>
 
-</a>
 
 
-</li>
 
 
+                    </ul>
 
 
+                </nav>
 
-</ul>
 
+            <?php endif; ?>
 
-</nav>
 
 
-<?php endif; ?>
 
 
 
 
 
 
-
-
-
-<!-- ===========================
+            <!-- ===========================
      FOOTER
 =========================== -->
 
 
-<footer class="text-center text-muted py-4">
+            <footer class="text-center text-muted py-4">
 
 
-<small>
+                <small>
 
 
-© <?=date('Y')?> Hotel Booking System V3 |
+                    © <?= date('Y') ?> Hotel Booking System V3 |
 
 
-Hotel Partner Management Dashboard
+                    Hotel Partner Management Dashboard
 
 
-</small>
+                </small>
 
 
-</footer>
-
-
-
-
-
-
-
-</main>
-
-
-</div>
+            </footer>
 
 
 
@@ -2539,42 +2476,53 @@ Hotel Partner Management Dashboard
 
 
 
+        </main>
 
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-
-
-<script>
-
-
-/*
-================================
-AUTO HIDE ALERT MESSAGE
-================================
-*/
-
-
-setTimeout(function(){
-
-
-let alerts = document.querySelectorAll('.alert');
-
-
-alerts.forEach(function(alert){
-
-
-alert.style.display='none';
-
-
-});
-
-
-},4000);
+    </div>
 
 
 
-</script>
+
+
+
+
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+
+
+    <script>
+
+
+        /*
+        ================================
+        AUTO HIDE ALERT MESSAGE
+        ================================
+        */
+
+
+        setTimeout(function () {
+
+
+            let alerts = document.querySelectorAll('.alert');
+
+
+            alerts.forEach(function (alert) {
+
+
+                alert.style.display = 'none';
+
+
+            });
+
+
+        }, 4000);
+
+
+
+    </script>
 
 
 
